@@ -19,7 +19,7 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
   const _ = useTranslation();
   const { token } = useAuth();
   const { envConfig } = useEnv();
-  const { settings, applyUILanguage } = useSettingsStore();
+  const { settings, applyUILanguage, setSettings } = useSettingsStore();
   const { getView, getViewSettings, setViewSettings, recreateViewer } = useReaderStore();
   const view = getView(bookKey);
   const viewSettings = getViewSettings(bookKey) || settings.globalViewSettings;
@@ -36,6 +36,21 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
   const [convertChineseVariant, setConvertChineseVariant] = useState(
     viewSettings.convertChineseVariant,
   );
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState(
+    viewSettings.ollamaBaseUrl || 'http://127.0.0.1:11434',
+  );
+  const [ollamaModel, setOllamaModel] = useState(viewSettings.ollamaModel || 'translategemma');
+  const [geminiApiKey, setGeminiApiKey] = useState(viewSettings.geminiApiKey || '');
+  const [geminiModel, setGeminiModel] = useState(
+    viewSettings.geminiModel || 'gemini-3-flash-preview',
+  );
+  const [geminiRpm, setGeminiRpm] = useState(viewSettings.geminiRpm?.toString() || '5');
+  const [geminiTpm, setGeminiTpm] = useState(viewSettings.geminiTpm?.toString() || '250000');
+  const [azureCpm, setAzureCpm] = useState(viewSettings.azureCpm?.toString() || '30000');
+  const [googleRpm, setGoogleRpm] = useState(viewSettings.googleRpm?.toString() || '10');
+  const [ttsEngine, setTtsEngine] = useState(viewSettings.ttsEngine || 'edge');
+  const [meloModelPath, setMeloModelPath] = useState(viewSettings.meloModelPath || '');
+  const [kokoroModelPath, setKokoroModelPath] = useState(viewSettings.kokoroModelPath || '');
 
   const resetToDefaults = useResetViewSettings();
 
@@ -48,6 +63,9 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
       showTranslateSource: setShowTranslateSource,
       ttsReadAloudText: setTtsReadAloudText,
       replaceQuotationMarks: setReplaceQuotationMarks,
+      ttsEngine: setTtsEngine,
+      meloModelPath: setMeloModelPath,
+      kokoroModelPath: setKokoroModelPath,
     });
   };
 
@@ -113,6 +131,35 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
     setViewSettings(bookKey, { ...viewSettings });
   };
 
+  const handleProviderConfigChange = async (
+    key: string,
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    setter(value);
+    const val =
+      key === 'geminiRpm' || key === 'geminiTpm' || key === 'azureCpm' || key === 'googleRpm'
+        ? parseInt(value, 10) || 0
+        : value;
+    saveViewSettings(
+      envConfig,
+      bookKey,
+      key as keyof typeof viewSettings,
+      val as never,
+      false,
+      false,
+    );
+    (viewSettings as unknown as Record<string, unknown>)[key] = val;
+    setViewSettings(bookKey, { ...viewSettings });
+
+    // 同步到 globalViewSettings 并持久化到磁盘
+    (settings.globalViewSettings as unknown as Record<string, unknown>)[key] = val;
+    const newSettings = { ...settings };
+    setSettings(newSettings);
+    const { saveSettings } = useSettingsStore.getState();
+    await saveSettings(envConfig, newSettings);
+  };
+
   const getCurrentTargetLangOption = () => {
     const value = translateTargetLang;
     const availableOptions = getLangOptions(TRANSLATOR_LANGS);
@@ -139,6 +186,23 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
       { value: 'translated', label: _('Translated Only') },
       { value: 'source', label: _('Source Only') },
     ];
+  };
+
+  const getTTSEngineOptions = () => {
+    return [
+      { value: 'edge', label: _('Edge TTS (Online)') },
+      { value: 'melo', label: _('Melo TTS (Local)') },
+      { value: 'kokoro', label: _('Kokoro TTS (Local)') },
+      { value: 'web', label: _('Web Speech API') },
+    ];
+  };
+
+  const handleSelectTTSEngine = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const option = event.target.value;
+    setTtsEngine(option);
+    saveViewSettings(envConfig, bookKey, 'ttsEngine', option, false, false);
+    viewSettings.ttsEngine = option;
+    setViewSettings(bookKey, { ...viewSettings });
   };
 
   useEffect(() => {
@@ -305,6 +369,122 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
               />
             </div>
 
+            {translationProvider === 'ollama' && (
+              <>
+                <div className='config-item'>
+                  <span>{_('Ollama URL')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={ollamaBaseUrl}
+                    placeholder='http://127.0.0.1:11434'
+                    onChange={(e) =>
+                      handleProviderConfigChange('ollamaBaseUrl', e.target.value, setOllamaBaseUrl)
+                    }
+                  />
+                </div>
+                <div className='config-item'>
+                  <span>{_('Model Name')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={ollamaModel}
+                    placeholder='llama3.2'
+                    onChange={(e) =>
+                      handleProviderConfigChange('ollamaModel', e.target.value, setOllamaModel)
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {translationProvider === 'gemini' && (
+              <>
+                <div className='config-item'>
+                  <span>{_('Gemini API Key')}</span>
+                  <input
+                    type='password'
+                    className='input input-bordered input-sm w-48'
+                    value={geminiApiKey}
+                    placeholder={_('Enter API Key')}
+                    onChange={(e) =>
+                      handleProviderConfigChange('geminiApiKey', e.target.value, setGeminiApiKey)
+                    }
+                  />
+                </div>
+                <div className='config-item'>
+                  <span>{_('Model Name')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={geminiModel}
+                    placeholder='gemini-3-flash-preview'
+                    onChange={(e) =>
+                      handleProviderConfigChange('geminiModel', e.target.value, setGeminiModel)
+                    }
+                  />
+                </div>
+                <div className='config-item'>
+                  <span>{_('RPM (Requests/Min)')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={geminiRpm}
+                    placeholder='5'
+                    onChange={(e) =>
+                      handleProviderConfigChange('geminiRpm', e.target.value, setGeminiRpm)
+                    }
+                  />
+                </div>
+                <div className='config-item'>
+                  <span>{_('TPM (Tokens/Min)')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={geminiTpm}
+                    placeholder='250000'
+                    onChange={(e) =>
+                      handleProviderConfigChange('geminiTpm', e.target.value, setGeminiTpm)
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {translationProvider === 'azure' && (
+              <>
+                <div className='config-item'>
+                  <span>{_('CPM (Chars/Min)')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={azureCpm}
+                    placeholder='30000'
+                    onChange={(e) =>
+                      handleProviderConfigChange('azureCpm', e.target.value, setAzureCpm)
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {translationProvider === 'google' && (
+              <>
+                <div className='config-item'>
+                  <span>{_('RPM (Requests/Min)')}</span>
+                  <input
+                    type='text'
+                    className='input input-bordered input-sm w-48'
+                    value={googleRpm}
+                    placeholder='10'
+                    onChange={(e) =>
+                      handleProviderConfigChange('googleRpm', e.target.value, setGoogleRpm)
+                    }
+                  />
+                </div>
+              </>
+            )}
+
             <div className='config-item' data-setting-id='settings.language.targetLanguage'>
               <span className=''>{_('Translate To')}</span>
               <Select
@@ -313,6 +493,56 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
                 options={getLangOptions(TRANSLATOR_LANGS)}
               />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className='w-full'>
+        <h2 className='mb-2 font-medium'>{_('TTS (Text to Speech)')}</h2>
+        <div className='card border-base-200 bg-base-100 border shadow'>
+          <div className='divide-base-200'>
+            <div className='config-item'>
+              <span className=''>{_('Audio Engine')}</span>
+              <Select
+                value={ttsEngine}
+                onChange={handleSelectTTSEngine}
+                options={getTTSEngineOptions()}
+              />
+            </div>
+
+            {ttsEngine === 'melo' && (
+              <div className='config-item !h-auto flex-col items-start gap-2 py-3'>
+                <span className='text-sm'>{_('Melo Model Path')}</span>
+                <input
+                  type='text'
+                  className='input input-bordered input-sm w-full'
+                  value={meloModelPath}
+                  placeholder={_('Enter model path (.onnx)')}
+                  onChange={(e) =>
+                    handleProviderConfigChange('meloModelPath', e.target.value, setMeloModelPath)
+                  }
+                />
+              </div>
+            )}
+
+            {ttsEngine === 'kokoro' && (
+              <div className='config-item !h-auto flex-col items-start gap-2 py-3'>
+                <span className='text-sm'>{_('Kokoro Model Path')}</span>
+                <input
+                  type='text'
+                  className='input input-bordered input-sm w-full'
+                  value={kokoroModelPath}
+                  placeholder={_('Enter model path (.onnx)')}
+                  onChange={(e) =>
+                    handleProviderConfigChange(
+                      'kokoroModelPath',
+                      e.target.value,
+                      setKokoroModelPath,
+                    )
+                  }
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

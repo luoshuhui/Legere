@@ -11,7 +11,7 @@ export interface TTSMessageEvent {
 export interface TTSClient {
   name: string;
   initialized: boolean;
-  init(): Promise<boolean>;
+  init(arg?: unknown): Promise<boolean>;
   shutdown(): Promise<void>;
   speak(ssml: string, signal: AbortSignal, preload?: boolean): AsyncIterable<TTSMessageEvent>;
   pause(): Promise<boolean>;

@@ -272,7 +272,6 @@ export class EdgeSpeechTTS {
 
   async #fetchEdgeSpeechHttp({ lang, text, voice, rate }: EdgeTTSPayload): Promise<Response> {
     const url = getNodeAPIBaseUrl() + '/tts/edge';
-
     const response = await fetchWithAuth(url, {
       method: 'POST',
       headers: {

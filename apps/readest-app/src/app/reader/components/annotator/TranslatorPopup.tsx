@@ -6,7 +6,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTranslator } from '@/hooks/useTranslator';
 import { TRANSLATOR_LANGS } from '@/services/constants';
-import { UseTranslatorOptions, getTranslators } from '@/services/translators';
+import { UseTranslatorOptions, getTranslators, ErrorCodes } from '@/services/translators';
 import Select from '@/components/Select';
 
 const notSupportedLangs = [''];
@@ -118,8 +118,12 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
           setDetectedSourceLang(detectedSource);
         }
       } catch (err) {
-        console.error(err);
-        if (!token) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes(ErrorCodes.RATE_LIMIT_EXCEEDED) || msg.includes('Rate Limit Exceeded')) {
+          setError(msg);
+        } else if (msg.includes('API key is not configured')) {
+          setError(_('Gemini API key is not configured. Please set it in Language settings.'));
+        } else if (!token) {
           setError(_('Unable to fetch the translation. Please log in first and try again.'));
         } else {
           setError(_('Unable to fetch the translation. Try again later.'));

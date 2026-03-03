@@ -226,6 +226,9 @@ export interface TTSConfig {
   ttsLocation: string;
   showTTSBar: boolean;
   ttsHighlightOptions: TTSHighlightOptions;
+  ttsEngine?: string;
+  meloModelPath?: string;
+  kokoroModelPath?: string;
 }
 
 export interface TranslatorConfig {
@@ -234,6 +237,14 @@ export interface TranslatorConfig {
   translateTargetLang: string;
   showTranslateSource: boolean;
   ttsReadAloudText: string;
+  ollamaBaseUrl?: string;
+  ollamaModel?: string;
+  geminiApiKey?: string;
+  geminiModel?: string;
+  geminiRpm?: number;
+  geminiTpm?: number;
+  azureCpm?: number;
+  googleRpm?: number;
 }
 
 export interface NoteExportConfig {

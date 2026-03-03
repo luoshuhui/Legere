@@ -8,6 +8,8 @@ import { WebSpeechClient } from './WebSpeechClient';
 import { NativeTTSClient } from './NativeTTSClient';
 import { EdgeTTSClient } from './EdgeTTSClient';
 import { TTSUtils } from './TTSUtils';
+import { MeloTTSClient } from './onnx/MeloTTSClient';
+import { KokoroTTSClient } from './onnx/KokoroTTSClient';
 import { TTSClient } from './TTSClient';
 import { isValidLang } from '@/utils/lang';
 
@@ -41,9 +43,13 @@ export class TTSController extends EventTarget {
   ttsClient: TTSClient;
   ttsWebClient: TTSClient;
   ttsEdgeClient: TTSClient;
+  ttsMeloClient: TTSClient;
+  ttsKokoroClient: TTSClient;
   ttsNativeClient: TTSClient | null = null;
   ttsWebVoices: TTSVoice[] = [];
   ttsEdgeVoices: TTSVoice[] = [];
+  ttsMeloVoices: TTSVoice[] = [];
+  ttsKokoroVoices: TTSVoice[] = [];
   ttsNativeVoices: TTSVoice[] = [];
   ttsTargetLang: string = '';
 
@@ -59,6 +65,8 @@ export class TTSController extends EventTarget {
     super();
     this.ttsWebClient = new WebSpeechClient(this);
     this.ttsEdgeClient = new EdgeTTSClient(this, appService);
+    this.ttsMeloClient = new MeloTTSClient();
+    this.ttsKokoroClient = new KokoroTTSClient();
     // TODO: implement native TTS client for iOS and PC
     if (appService?.isAndroidApp) {
       this.ttsNativeClient = new NativeTTSClient(this);
@@ -71,7 +79,7 @@ export class TTSController extends EventTarget {
     this.onSectionChange = onSectionChange;
   }
 
-  async init() {
+  async init(ttsEngine?: string, modelPaths?: { melo?: string; kokoro?: string }) {
     const availableClients = [];
     if (await this.ttsEdgeClient.init()) {
       availableClients.push(this.ttsEdgeClient);
@@ -83,8 +91,14 @@ export class TTSController extends EventTarget {
     if (await this.ttsWebClient.init()) {
       availableClients.push(this.ttsWebClient);
     }
+    if (await this.ttsMeloClient.init(modelPaths?.melo)) {
+      availableClients.push(this.ttsMeloClient);
+    }
+    if (await this.ttsKokoroClient.init(modelPaths?.kokoro)) {
+      availableClients.push(this.ttsKokoroClient);
+    }
     this.ttsClient = availableClients[0] || this.ttsWebClient;
-    const preferredClientName = TTSUtils.getPreferredClient();
+    const preferredClientName = ttsEngine || TTSUtils.getPreferredClient();
     if (preferredClientName) {
       const preferredClient = availableClients.find(
         (client) => client.name === preferredClientName,
@@ -95,6 +109,8 @@ export class TTSController extends EventTarget {
     }
     this.ttsWebVoices = await this.ttsWebClient.getAllVoices();
     this.ttsEdgeVoices = await this.ttsEdgeClient.getAllVoices();
+    this.ttsMeloVoices = await this.ttsMeloClient.getAllVoices();
+    this.ttsKokoroVoices = await this.ttsKokoroClient.getAllVoices();
   }
 
   #getHighlighter() {

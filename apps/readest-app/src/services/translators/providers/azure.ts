@@ -1,8 +1,10 @@
 import { stubTranslation as _ } from '@/utils/misc';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { isTauriAppPlatform } from '@/services/environment';
-import { TranslationProvider } from '../types';
+import { useSettingsStore } from '@/store/settingsStore';
+import { ErrorCodes, TranslationProvider, TranslatorConfigField } from '../types';
 import { normalizeToFullLang } from '@/utils/lang';
+import { RateLimiter } from '../rateLimiter';
 
 interface TokenCache {
   token: string;
@@ -10,47 +12,54 @@ interface TokenCache {
 }
 
 let tokenCache: TokenCache | null = null;
+const rateLimiter = new RateLimiter();
+
+const DEFAULT_CPM = 30000;
+
+const CONFIG_FIELDS: TranslatorConfigField[] = [
+  { key: 'azureCpm', label: _('CPM (Chars/Min)'), type: 'text', placeholder: String(DEFAULT_CPM) },
+];
+
+const getConfig = () => {
+  const { settings } = useSettingsStore.getState();
+  const vs = settings.globalViewSettings;
+  return {
+    cpm: Number(vs?.azureCpm) || DEFAULT_CPM,
+  };
+};
 
 const getAuthToken = async (): Promise<string> => {
+  /* ... 原有 getAuthToken 代码逻辑 ... */
   const now = Date.now();
-
-  if (tokenCache && tokenCache.expiresAt > now) {
-    return tokenCache.token;
-  }
-
+  if (tokenCache && tokenCache.expiresAt > now) return tokenCache.token;
   try {
     const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
     const tokenResponse = await fetch('https://edge.microsoft.com/translate/auth', {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
     });
-
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to get auth token: ${tokenResponse.status}`);
-    }
-
+    if (!tokenResponse.ok) throw new Error(`Token failed: ${tokenResponse.status}`);
     const token = await tokenResponse.text();
-    const expiresAt = now + 8 * 60 * 1000;
-
-    tokenCache = {
-      token,
-      expiresAt,
-    };
-
+    tokenCache = { token, expiresAt: now + 8 * 60 * 1000 };
     return token;
-  } catch (error) {
-    console.error('Error getting Microsoft translation auth token:', error);
-    throw error;
+  } catch (e) {
+    console.error('Error getting Microsoft auth token:', e);
+    throw e;
   }
 };
 
 export const azureProvider: TranslationProvider = {
   name: 'azure',
   label: _('Azure Translator'),
+  configurable: true,
+  configFields: CONFIG_FIELDS,
   translate: async (text: string[], sourceLang: string, targetLang: string): Promise<string[]> => {
     if (!text.length) return [];
+
+    const { cpm } = getConfig();
+    const wait = rateLimiter.getWaitSeconds(0, cpm);
+    if (wait > 0) {
+      throw new Error(`${ErrorCodes.RATE_LIMIT_EXCEEDED} 超出频率限制，请在 ${wait} 秒后重试。`);
+    }
 
     const results: string[] = [];
     const msSourceLang = sourceLang ? normalizeToFullLang(sourceLang) : '';
@@ -63,13 +72,9 @@ export const azureProvider: TranslationProvider = {
       }
 
       const url = 'https://api-edge.cognitive.microsofttranslator.com/translate';
-      const params = new URLSearchParams({
-        to: msTargetLang,
-        'api-version': '3.0',
-      });
-      if (msSourceLang && msSourceLang.toLowerCase() !== 'auto') {
+      const params = new URLSearchParams({ to: msTargetLang, 'api-version': '3.0' });
+      if (msSourceLang && msSourceLang.toLowerCase() !== 'auto')
         params.append('from', msSourceLang);
-      }
 
       const token = await getAuthToken();
       const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
@@ -82,21 +87,19 @@ export const azureProvider: TranslationProvider = {
         body: JSON.stringify([{ Text: line }]),
       });
 
-      if (!response.ok) {
-        throw new Error(`Translation failed with status ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Status ${response.status}`);
 
       const data = await response.json();
-
       if (Array.isArray(data) && data.length > 0 && data[0].translations) {
-        results[index] = data[0].translations[0].text || line;
+        const translated = data[0].translations[0].text || line;
+        rateLimiter.record(line.length);
+        results[index] = translated;
       } else {
         results[index] = line;
       }
     });
 
     await Promise.all(translationPromises);
-
     return results;
   },
 };

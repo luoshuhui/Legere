@@ -426,7 +426,10 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
       ttsControllerRef.current = ttsController;
       setTtsController(ttsController);
 
-      await ttsController.init();
+      await ttsController.init(viewSettings.ttsEngine, {
+        melo: viewSettings.meloModelPath,
+        kokoro: viewSettings.kokoroModelPath,
+      });
       await ttsController.initViewTTS(
         getTTSHighlightOptions(viewSettings.ttsHighlightOptions, viewSettings.isEink),
       );

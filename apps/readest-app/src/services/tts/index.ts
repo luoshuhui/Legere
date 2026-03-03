@@ -3,5 +3,7 @@ export * from './TTSClient';
 export * from './WebSpeechClient';
 export * from './EdgeTTSClient';
 export * from './NativeTTSClient';
+export * from './onnx/MeloTTSClient';
+export * from './onnx/KokoroTTSClient';
 export * from './TTSController';
 export * from './TTSData';
