@@ -334,8 +334,15 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
                 type='checkbox'
                 className='toggle'
                 checked={translationEnabled}
-                onChange={() => setTranslationEnabled(!translationEnabled)}
-                disabled={!bookKey}
+                onChange={() => {
+                  const newValue = !translationEnabled;
+                  setTranslationEnabled(newValue);
+                  saveViewSettings(envConfig, bookKey, 'translationEnabled', newValue, true, false);
+                  if (viewSettings) {
+                    viewSettings.translationEnabled = newValue;
+                    setViewSettings(bookKey, { ...viewSettings });
+                  }
+                }}
               />
             </div>
 

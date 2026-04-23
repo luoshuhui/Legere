@@ -176,6 +176,14 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
       }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const throttledSetViewSettings = useCallback(
+      throttle((key: string, settings: any) => {
+        setViewSettings(key, settings);
+      }, 2000),
+      [],
+    );
+
     const handleHighlightMark = (e: Event) => {
       const { cfi } = (e as CustomEvent<{ cfi: string }>).detail;
       const view = getView(bookKey);
@@ -185,7 +193,7 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
       if (!cfi || !view || !location || !viewSettings) return;
 
       viewSettings.ttsLocation = cfi;
-      setViewSettings(bookKey, viewSettings);
+      throttledSetViewSettings(bookKey, viewSettings);
 
       if (!followingTTSLocationRef.current) return;
 

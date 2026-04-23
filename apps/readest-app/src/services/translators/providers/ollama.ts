@@ -8,17 +8,17 @@ import { TranslationProvider, TranslatorConfigField } from '../types';
 const OLLAMA_DEFAULT_URL = 'http://127.0.0.1:11434';
 const OLLAMA_DEFAULT_MODEL = 'translategemma';
 
-const log = async (msg: string) => {
+const log = (msg: string) => {
   if (isTauriAppPlatform()) {
-    await info(`[Ollama] ${msg}`);
+    info(`[Ollama] ${msg}`);
   } else {
     console.log(`[Ollama] ${msg}`);
   }
 };
 
-const logErr = async (msg: string) => {
+const logErr = (msg: string) => {
   if (isTauriAppPlatform()) {
-    await logError(`[Ollama] ${msg}`);
+    logError(`[Ollama] ${msg}`);
   } else {
     console.error(`[Ollama] ${msg}`);
   }
@@ -49,7 +49,7 @@ export const ollamaProvider: TranslationProvider = {
     const { baseUrl, model } = getConfig();
     const isTauri = isTauriAppPlatform();
     const fetch = isTauri ? tauriFetch : window.fetch;
-    await log(`config: baseUrl=${baseUrl} model=${model} isTauri=${isTauri}`);
+    log(`config: baseUrl=${baseUrl} model=${model} isTauri=${isTauri}`);
 
     const results: string[] = [];
     const src = sourceLang === 'AUTO' ? '' : sourceLang;
@@ -63,7 +63,7 @@ export const ollamaProvider: TranslationProvider = {
         }
 
         const url = `${baseUrl}/api/chat`;
-        await log(`calling: ${url} model=${model}`);
+        log(`calling: ${url} model=${model}`);
 
         const response = await fetch(url, {
           method: 'POST',
@@ -81,17 +81,17 @@ export const ollamaProvider: TranslationProvider = {
           }),
         });
 
-        await log(`response status=${response.status}`);
+        log(`response status=${response.status}`);
 
         if (!response.ok) {
           const body = await response.text().catch(() => '');
-          await logErr(`error status=${response.status} body=${body}`);
+          logErr(`error status=${response.status} body=${body}`);
           throw new Error(`Ollama ${response.status}: ${body}`);
         }
 
         const data = await response.json();
         const translated = data?.message?.content?.trim();
-        await log(`translated=${!!translated}`);
+        log(`translated=${!!translated}`);
         results[index] = translated || text;
       }),
     );
