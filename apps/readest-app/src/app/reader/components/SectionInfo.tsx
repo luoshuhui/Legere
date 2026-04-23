@@ -31,20 +31,29 @@ const SectionInfo: React.FC<SectionInfoProps> = ({
 }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
-  const { hoveredBookKey, setHoveredBookKey } = useReaderStore();
+  const { hoveredBookKey, getView, setHoveredBookKey } = useReaderStore();
   const { systemUIVisible, statusBarHeight } = useThemeStore();
   const topInset = Math.max(
     gridInsets.top,
     appService?.isAndroidApp && systemUIVisible ? statusBarHeight / 2 : 0,
   );
 
+  const handleNotchClick = () => {
+    if (isScrolled) {
+      getView(bookKey)?.renderer.scrollToAnchor?.(0, 'anchor', true);
+    }
+  };
+
   return (
     <>
       <div
         className={clsx(
-          'absolute left-0 right-0 top-0 z-10',
+          'notch-area absolute left-0 right-0 top-0 z-10',
           isScrolled && !isVertical && 'bg-base-100',
         )}
+        role='none'
+        tabIndex={-1}
+        onClick={handleNotchClick}
         style={{
           height: `${topInset}px`,
         }}
@@ -57,16 +66,17 @@ const SectionInfo: React.FC<SectionInfoProps> = ({
           isScrolled && !isVertical && 'bg-base-100',
         )}
         role='none'
+        tabIndex={-1}
         onClick={() => setHoveredBookKey(bookKey)}
         style={
           isVertical
             ? {
                 top: `${(contentInsets.top - gridInsets.top) * 1.5}px`,
+                bottom: `${(contentInsets.bottom - gridInsets.bottom) * 1.5}px`,
                 right: showDoubleBorder
                   ? `calc(${contentInsets.right}px)`
                   : `calc(${Math.max(0, contentInsets.right - 32)}px)`,
                 width: showDoubleBorder ? '32px' : `${contentInsets.right}px`,
-                height: `calc(100% - ${contentInsets.top + contentInsets.bottom}px)`,
               }
             : {
                 top: `${topInset}px`,
@@ -80,7 +90,9 @@ const SectionInfo: React.FC<SectionInfoProps> = ({
           className={clsx(
             'text-center',
             isVertical ? '' : 'line-clamp-1',
-            !isVertical && hoveredBookKey == bookKey && 'hidden',
+            !isVertical &&
+              (hoveredBookKey == bookKey || (hoveredBookKey && appService?.isMobile)) &&
+              'hidden',
           )}
         >
           {section || ''}

@@ -12,8 +12,19 @@ export interface TranslationProvider {
   label: string;
   authRequired?: boolean;
   quotaExceeded?: boolean;
+<<<<<<< HEAD
   configurable?: boolean;
   configFields?: TranslatorConfigField[];
+=======
+  /**
+   * Marks a provider as temporarily unavailable. Disabled providers are
+   * filtered out of `getTranslators()` / `getTranslator()`, so the UI never
+   * lists them and the fallback logic in `useTranslator` skips over them.
+   * Flip back to `false` (or delete the field) once the provider is healthy
+   * again — no other code changes required.
+   */
+  disabled?: boolean;
+>>>>>>> upstream/main
   translate: (
     texts: string[],
     sourceLang: string,

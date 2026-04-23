@@ -58,6 +58,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
   const [invertImgColorInDark, setInvertImgColorInDark] = useState(
     viewSettings!.invertImgColorInDark,
   );
+  const [applyThemeToPDF, setApplyThemeToPDF] = useState(viewSettings!.applyThemeToPDF!);
 
   const zoomIn = () => setZoomLevel((prev) => Math.min(prev + ZOOM_STEP, MAX_ZOOM_LEVEL));
   const zoomOut = () => setZoomLevel((prev) => Math.max(prev - ZOOM_STEP, MIN_ZOOM_LEVEL));
@@ -113,6 +114,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
   }, [isScrolledMode]);
 
   useEffect(() => {
+    if (zoomLevel === viewSettings.zoomLevel) return;
     saveViewSettings(envConfig, bookKey, 'zoomLevel', zoomLevel, true, true);
     if (bookData.bookDoc?.rendition?.layout === 'pre-paginated') {
       getView(bookKey)?.renderer.setAttribute('scale-factor', zoomLevel);
@@ -125,6 +127,12 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
     saveViewSettings(envConfig, bookKey, 'invertImgColorInDark', invertImgColorInDark, true, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invertImgColorInDark]);
+
+  useEffect(() => {
+    if (applyThemeToPDF === viewSettings.applyThemeToPDF) return;
+    saveViewSettings(envConfig, bookKey, 'applyThemeToPDF', applyThemeToPDF, true, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyThemeToPDF]);
 
   useEffect(() => {
     if (zoomMode === viewSettings.zoomMode) return;
@@ -156,12 +164,17 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keepCoverSpread]);
 
-  const lastSyncTime = Math.max(config?.lastSyncedAtConfig || 0, config?.lastSyncedAtNotes || 0);
+  const lastSyncTime = Math.max(
+    config?.lastSyncedAtConfig || 0,
+    config?.lastSyncedAtNotes || 0,
+    config?.lastPushedAtConfig || 0,
+    config?.lastPushedAtNotes || 0,
+  );
 
   return (
     <Menu
       className={clsx(
-        'view-menu dropdown-content dropdown-right no-triangle z-20 mt-1 border',
+        'view-menu dropdown-content dropdown-right no-triangle z-20 mt-1.5 border',
         'bgcolor-base-200 shadow-2xl',
       )}
       style={{
@@ -193,7 +206,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
               )}
               onClick={resetZoom}
             >
-              {zoomLevel}%
+              {Math.round(zoomLevel)}%
             </button>
             <button
               title={_('Zoom In')}
@@ -273,7 +286,6 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
         shortcut='Shift+J'
         Icon={isScrolledMode ? MdCheck : undefined}
         onClick={toggleScrolledMode}
-        disabled={bookData.isFixedLayout}
       />
 
       <hr aria-hidden='true' className='border-base-300 my-1' />
@@ -323,6 +335,13 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
         Icon={themeMode === 'dark' ? BiMoon : themeMode === 'light' ? BiSun : TbSunMoon}
         onClick={cycleThemeMode}
       />
+      {bookData.book?.format === 'PDF' && appService?.supportsCanvasContext2DFilter && (
+        <MenuItem
+          label={_('Apply Theme Colors to PDF')}
+          Icon={applyThemeToPDF ? MdCheck : undefined}
+          onClick={() => setApplyThemeToPDF(!applyThemeToPDF)}
+        />
+      )}
       <MenuItem
         label={_('Invert Image In Dark Mode')}
         disabled={!isDarkMode}

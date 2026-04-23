@@ -13,12 +13,12 @@ import { Insets } from '@/types/misc';
 import { EnvConfigType } from '@/services/environment';
 import { FoliateView } from '@/types/view';
 import { DocumentLoader, TOCItem } from '@/libs/document';
-import { updateToc } from '@/utils/toc';
+import { BOOK_NAV_VERSION, computeBookNav, hydrateBookNav, updateToc } from '@/services/nav';
 import { formatTitle, getMetadataHash, getPrimaryLanguage } from '@/utils/book';
 import { getBaseFilename } from '@/utils/path';
 import { SUPPORTED_LANGNAMES } from '@/services/constants';
 import { useSettingsStore } from './settingsStore';
-import { useBookDataStore } from './bookDataStore';
+import { BookData, useBookDataStore } from './bookDataStore';
 import { useLibraryStore } from './libraryStore';
 import { uniqueId } from '@/utils/misc';
 
@@ -147,8 +147,8 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     try {
       const appService = await envConfig.getAppService();
       const { settings } = useSettingsStore.getState();
-      const { library } = useLibraryStore.getState();
-      const book = library.find((b) => b.hash === id);
+      const { getBookByHash } = useLibraryStore.getState();
+      const book = getBookByHash(id);
       if (!book) {
         throw new Error('Book not found');
       }
@@ -162,6 +162,40 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         bookDoc = doc.book;
       }
       const config = await appService.loadBookConfig(book, settings);
+      // Import annotations from third-party readers on first open
+      if (bookDoc.metadata.identifier) {
+        const { getAnnotationProviders } = await import('@/services/annotation');
+        for (const provider of getAnnotationProviders()) {
+          if (provider.isAvailable(appService)) {
+            const merged = await provider.importAnnotations(
+              appService,
+              bookDoc.metadata.identifier,
+              config,
+            );
+            if (merged !== config) {
+              Object.assign(config, merged);
+              await appService.saveBookConfig(book, config, settings);
+            }
+          }
+        }
+      }
+      // Filter out invalid booknotes
+      config.booknotes = config.booknotes?.filter((booknote) => booknote.cfi) ?? [];
+      // Load cached book navigation (TOC + section fragments) or compute and persist.
+      if (book.format === 'EPUB' && bookDoc.rendition?.layout !== 'pre-paginated') {
+        const cachedNav = await appService.loadBookNav(book);
+        if (cachedNav?.version === BOOK_NAV_VERSION && process.env.NODE_ENV === 'production') {
+          hydrateBookNav(bookDoc, cachedNav);
+        } else {
+          const freshNav = await computeBookNav(bookDoc);
+          hydrateBookNav(bookDoc, freshNav);
+          try {
+            await appService.saveBookNav(book, freshNav);
+          } catch (e) {
+            console.warn('Failed to persist book nav cache:', e);
+          }
+        }
+      }
       await updateToc(
         bookDoc,
         config.viewSettings?.sortedTOC ?? false,
@@ -182,24 +216,27 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
       book.primaryLanguage = book.primaryLanguage ?? primaryLanguage;
       book.metadata = book.metadata ?? bookDoc.metadata;
 
-      // Update series info from metadata
+      // Update series info from metadata if available and not already set on the book
       if (bookDoc.metadata.belongsTo?.series) {
         const belongsTo = bookDoc.metadata.belongsTo.series;
         const series = Array.isArray(belongsTo) ? belongsTo[0] : belongsTo;
         if (series) {
-          book.metadata.series = formatTitle(series.name);
-          book.metadata.seriesIndex = parseFloat(series.position || '0');
+          book.metadata.series = book.metadata.series ?? formatTitle(series.name);
+          book.metadata.seriesIndex =
+            book.metadata.seriesIndex ?? parseFloat(series.position || '0');
         }
       }
       // TODO: uncomment this when we can ensure metaHash is correctly generated for all books
       // book.metaHash = book.metaHash ?? getMetadataHash(bookDoc.metadata);
       book.metaHash = getMetadataHash(bookDoc.metadata);
 
-      const isFixedLayout = FIXED_LAYOUT_FORMATS.has(book.format);
+      const isFixedLayout =
+        bookDoc.rendition?.layout === 'pre-paginated' || FIXED_LAYOUT_FORMATS.has(book.format);
+      const newBookData: BookData = { id, book, file, config, bookDoc, isFixedLayout };
       useBookDataStore.setState((state) => ({
         booksData: {
           ...state.booksData,
-          [id]: { id, book, file, config, bookDoc, isFixedLayout },
+          [id]: newBookData,
         },
       }));
       const configViewSettings = config.viewSettings!;
@@ -301,37 +338,20 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
 
       const pageInfo = bookData.isFixedLayout ? section : pageinfo;
       const progress: [number, number] = [pageInfo.current + 1, pageInfo.total];
-
-      // calculate progress percentage
       const progressPercentage = Math.round((progress[0] / progress[1]) * 100);
 
-      // update library book progress
-      const { library, setLibrary } = useLibraryStore.getState();
-      const bookIndex = library.findIndex((b) => b.hash === id);
-      if (bookIndex !== -1) {
-        const updatedLibrary = [...library];
-        const existingBook = updatedLibrary[bookIndex]!;
-
-        // determine new reading status
+      // Lightweight library update — O(1) lookup, no array copy, no refreshGroups
+      const { getBookByHash, updateBookProgress } = useLibraryStore.getState();
+      const existingBook = getBookByHash(id);
+      if (existingBook) {
         let newReadingStatus = existingBook.readingStatus;
-
-        // auto-clear 'unread' status when user starts reading (progress changes)
         if (existingBook.readingStatus === 'unread') {
           newReadingStatus = undefined;
         }
-
-        // auto mark as 'finished' when progress reaches 100%
         if (progressPercentage >= 100 && existingBook.readingStatus !== 'finished') {
           newReadingStatus = 'finished';
         }
-
-        updatedLibrary[bookIndex] = {
-          ...existingBook,
-          progress,
-          readingStatus: newReadingStatus,
-          updatedAt: Date.now(),
-        };
-        setLibrary(updatedLibrary);
+        updateBookProgress(id, progress, newReadingStatus);
       }
 
       const oldConfig = bookData.config;
@@ -361,13 +381,13 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
               location,
               sectionHref: tocItem?.href,
               sectionLabel: tocItem?.label,
-              sectionId: tocItem?.id,
               section,
               pageinfo,
               timeinfo,
+              index: section.current,
               range,
-              page: pageInfo.current + 1, // 1-based page number
-            },
+              page: pageInfo.current + 1,
+            } as BookProgress,
           },
         },
       };

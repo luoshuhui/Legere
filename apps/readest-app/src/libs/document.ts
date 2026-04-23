@@ -23,6 +23,16 @@ export interface TOCItem {
   subitems?: TOCItem[];
 }
 
+export interface SectionFragment {
+  id: string;
+  href: string;
+  cfi: string;
+  size: number;
+  linear: string;
+  location?: Location;
+  fragments?: Array<SectionFragment>;
+}
+
 export interface SectionItem {
   id: string;
   cfi: string;
@@ -31,8 +41,9 @@ export interface SectionItem {
   href?: string;
   location?: Location;
   pageSpread?: 'left' | 'right' | 'center' | '';
-  subitems?: Array<SectionItem>;
+  fragments?: Array<SectionFragment>;
 
+  loadText?: () => Promise<string | null>;
   createDocument: () => Promise<Document>;
 }
 
@@ -47,6 +58,7 @@ export type BookMetadata = {
   description?: string;
   subject?: string | string[] | Contributor;
   identifier?: string;
+  isbn?: string;
   altIdentifier?: string | string[] | Identifier;
   belongsTo?: {
     collection?: Array<Collection> | Collection;
@@ -65,14 +77,14 @@ export type BookMetadata = {
 
 export interface BookDoc {
   metadata: BookMetadata;
-  rendition?: {
+  rendition: {
     layout?: 'pre-paginated' | 'reflowable';
     spread?: 'auto' | 'none';
     viewport?: { width: number; height: number };
   };
   dir: string;
   toc?: Array<TOCItem>;
-  sections?: Array<SectionItem>;
+  sections: Array<SectionItem>;
   transformTarget?: EventTarget;
   splitTOCHref(href: string): Array<string | number>;
   getCover(): Promise<Blob | null>;
@@ -255,7 +267,17 @@ export class DocumentLoader {
 
 export const getDirection = (doc: Document) => {
   const { defaultView } = doc;
-  const { writingMode, direction } = defaultView!.getComputedStyle(doc.body);
+  let { writingMode, direction } = defaultView!.getComputedStyle(doc.body);
+  // Some EPUBs set writing-mode on the first child of body instead of body itself
+  if (!writingMode || writingMode === 'horizontal-tb') {
+    const firstChild = doc.body.querySelector(':scope > :not([cfi-inert])');
+    if (firstChild) {
+      const childStyle = defaultView!.getComputedStyle(firstChild);
+      if (childStyle.writingMode === 'vertical-rl' || childStyle.writingMode === 'vertical-lr') {
+        writingMode = childStyle.writingMode;
+      }
+    }
+  }
   const vertical = writingMode === 'vertical-rl' || writingMode === 'vertical-lr';
   const rtl = doc.body.dir === 'rtl' || direction === 'rtl' || doc.documentElement.dir === 'rtl';
   return { vertical, rtl };

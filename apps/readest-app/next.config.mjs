@@ -31,12 +31,14 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       nunjucks: 'nunjucks/browser/nunjucks.js',
+      ...(appPlatform !== 'web' ? { '@tursodatabase/database-wasm': false } : {}),
     };
     return config;
   },
   turbopack: {
     resolveAlias: {
       nunjucks: 'nunjucks/browser/nunjucks.js',
+      ...(appPlatform !== 'web' ? { '@tursodatabase/database-wasm': './src/utils/stub.ts' } : {}),
     },
   },
   transpilePackages: [
@@ -59,6 +61,14 @@ const nextConfig = {
           'marked',
         ]),
   ],
+  async rewrites() {
+    return [
+      {
+        source: '/reader/:ids',
+        destination: '/reader?ids=:ids',
+      },
+    ];
+  },
   async headers() {
     return [
       {

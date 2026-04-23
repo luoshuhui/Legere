@@ -128,6 +128,7 @@ const getColorStyles = (
   isEink: boolean,
 ) => {
   const { bg, fg, primary, isDarkMode } = themeCode;
+  const hasBackgroundTexture = !!backgroundTextureId && backgroundTextureId !== 'none';
   const colorStyles = `
     html {
       --bg-texture-id: ${backgroundTextureId};
@@ -153,9 +154,9 @@ const getColorStyles = (
     }
     section, aside, blockquote, article, nav, header, footer, main, figure,
     div, p, font, h1, h2, h3, h4, h5, h6, li, span {
-      ${overrideColor ? `background-color: ${bg} !important;` : ''}
-      ${overrideColor ? `color: ${fg} !important;` : ''}
-      ${overrideColor ? `border-color: ${fg} !important;` : ''}
+      ${overrideColor && !hasBackgroundTexture ? `background-color: ${bg} !important;` : ''}
+      ${overrideColor && !hasBackgroundTexture ? `color: ${fg} !important;` : ''}
+      ${overrideColor && !hasBackgroundTexture ? `border-color: ${fg} !important;` : ''}
     }
     pre, span { /* inline code blocks */
       ${overrideColor ? `background-color: ${bg} !important;` : ''}
@@ -190,8 +191,10 @@ const getColorStyles = (
     }
     table {
       overflow: auto;
-      table-layout: fixed;
       display: table !important;
+    }
+    table:has(> colgroup) {
+      table-layout: fixed;
     }
     /* code */
     body.theme-dark code {
@@ -235,46 +238,24 @@ const getColorStyles = (
   return colorStyles;
 };
 
-const getLayoutStyles = (
-  overrideLayout: boolean,
+const getPageLayoutStyles = (
   marginTop: number,
   marginRight: number,
   marginBottom: number,
   marginLeft: number,
-  paragraphMargin: number,
-  lineSpacing: number,
-  wordSpacing: number,
-  letterSpacing: number,
-  textIndent: number,
-  justify: boolean,
-  hyphenate: boolean,
   zoomLevel: number,
   writingMode: string,
   vertical: boolean,
-) => {
-  const layoutStyle = `
+) => `
   @namespace epub "http://www.idpf.org/2007/ops";
   html {
-    --default-text-align: ${justify ? 'justify' : 'start'};
     --margin-top: ${marginTop}px;
     --margin-right: ${marginRight}px;
     --margin-bottom: ${marginBottom}px;
     --margin-left: ${marginLeft}px;
-    hanging-punctuation: allow-end last;
-    orphans: 2;
-    widows: 2;
-  }
-  [align="left"] { text-align: left; }
-  [align="right"] { text-align: right; }
-  [align="center"] { text-align: center; }
-  [align="justify"] { text-align: justify; }
-  :is(hgroup, header) p {
-      text-align: unset;
-      hyphens: unset;
   }
   html, body {
     ${writingMode === 'auto' ? '' : `writing-mode: ${writingMode} !important;`}
-    text-align: var(--default-text-align);
     max-height: unset;
     -webkit-touch-callout: none;
     -webkit-user-select: text;
@@ -303,69 +284,6 @@ const getLayoutStyles = (
     position: absolute;
     inset: -10px;
   }
-  p, blockquote, dd, div:not(:has(*:not(b, a, em, i, strong, u, span))) {
-    line-height: ${lineSpacing} ${overrideLayout ? '!important' : ''};
-    word-spacing: ${wordSpacing}px ${overrideLayout ? '!important' : ''};
-    letter-spacing: ${letterSpacing}px ${overrideLayout ? '!important' : ''};
-    text-indent: ${textIndent}em ${overrideLayout ? '!important' : ''};
-    -webkit-hyphens: ${hyphenate ? 'auto' : 'manual'};
-    hyphens: ${hyphenate ? 'auto' : 'manual'};
-    -webkit-hyphenate-limit-before: 3;
-    -webkit-hyphenate-limit-after: 2;
-    -webkit-hyphenate-limit-lines: 2;
-    hanging-punctuation: allow-end last;
-    widows: 2;
-  }
-  p.aligned-center, blockquote.aligned-center,
-  dd.aligned-center, div.aligned-center {
-    text-align: center ${overrideLayout ? '!important' : ''};
-  }
-  p.aligned-left, blockquote.aligned-left,
-  dd.aligned-left, div.aligned-left {
-    ${justify && overrideLayout ? 'text-align: justify !important;' : ''}
-  }
-  p.aligned-right, blockquote.aligned-right,
-  dd.aligned-right, div.aligned-right {
-    text-align: right ${overrideLayout ? '!important' : ''};
-  }
-  p.aligned-justify, blockquote.aligned-justify,
-  dd.aligned-justify, div.aligned-justify {
-    ${!justify && overrideLayout ? 'text-align: initial !important;' : ''};
-  }
-  p:has(> img:only-child), p:has(> span:only-child > img:only-child),
-  p:has(> img:not(.has-text-siblings)),
-  p:has(> a:first-child + img:last-child) {
-    text-indent: initial !important;
-  }
-  blockquote[align="center"], div[align="center"],
-  p[align="center"], dd[align="center"],
-  p.aligned-center, blockquote.aligned-center,
-  dd.aligned-center, div.aligned-center,
-  li p, ol p, ul p, td p {
-    text-indent: initial !important;
-  }
-  p {
-    ${vertical ? `margin-left: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
-    ${vertical ? `margin-right: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
-    ${vertical ? `margin-top: unset ${overrideLayout ? '!important' : ''};` : ''}
-    ${vertical ? `margin-bottom: unset ${overrideLayout ? '!important' : ''};` : ''}
-    ${!vertical ? `margin-top: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
-    ${!vertical ? `margin-bottom: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
-    ${!vertical ? `margin-left: unset ${overrideLayout ? '!important' : ''};` : ''}
-    ${!vertical ? `margin-right: unset ${overrideLayout ? '!important' : ''};` : ''}
-  }
-  div {
-    ${vertical && overrideLayout ? `margin-left: ${paragraphMargin}em !important;` : ''}
-    ${vertical && overrideLayout ? `margin-right: ${paragraphMargin}em !important;` : ''}
-    ${!vertical && overrideLayout ? `margin-top: ${paragraphMargin}em !important;` : ''}
-    ${!vertical && overrideLayout ? `margin-bottom: ${paragraphMargin}em !important;` : ''}
-  }
-
-  :lang(zh), :lang(ja), :lang(ko) {
-    widows: 1;
-    orphans: 1;
-  }
-
   pre {
     white-space: pre-wrap !important;
   }
@@ -381,14 +299,6 @@ const getLayoutStyles = (
   /* Now begins really dirty hacks to fix some badly designed epubs */
   body {
     line-height: unset;
-  }
-
-  img.pi {
-    ${vertical ? 'transform: rotate(90deg);' : ''}
-    ${vertical ? 'transform-origin: center;' : ''}
-    ${vertical ? 'height: 2em;' : ''}
-    ${vertical ? `width: ${lineSpacing}em;` : ''}
-    ${vertical ? `vertical-align: unset;` : ''}
   }
 
   .duokan-footnote-content,
@@ -444,12 +354,6 @@ const getLayoutStyles = (
     margin-bottom: calc(var(--available-height) * 1px);
   }
 
-  /* workaround for some badly designed epubs */
-  div.left *, p.left * { text-align: left; }
-  div.right *, p.right * { text-align: right; }
-  div.center *, p.center * { text-align: center; }
-  div.justify *, p.justify * { text-align: justify; }
-
   .br {
     display: flow-root;
   }
@@ -457,13 +361,125 @@ const getLayoutStyles = (
   .h5_mainbody {
     overflow: unset !important;
   }
+`;
+
+// Paragraph-scoped CSS controlled by the Paragraph section of the Layout
+// panel. Gated by BookStyle.useBookLayout: when true, this chunk is skipped
+// and the book's own paragraph formatting takes over.
+const getParagraphLayoutStyles = (
+  overrideLayout: boolean,
+  paragraphMargin: number,
+  lineSpacing: number,
+  wordSpacing: number,
+  letterSpacing: number,
+  textIndent: number,
+  justify: boolean,
+  hyphenate: boolean,
+  vertical: boolean,
+) => `
+  html {
+    --default-text-align: ${justify ? 'justify' : 'start'};
+    hanging-punctuation: allow-end last;
+    orphans: 2;
+    widows: 2;
+  }
+  html, body {
+    text-align: var(--default-text-align);
+  }
+  [align="left"] { text-align: left; }
+  [align="right"] { text-align: right; }
+  [align="center"] { text-align: center; }
+  [align="justify"] { text-align: justify; }
+  :is(hgroup, header) p {
+      text-align: unset;
+      hyphens: unset;
+  }
+  p, blockquote, dd, div:not(:has(*:not(b, a, em, i, strong, u, span))) {
+    line-height: ${lineSpacing} ${overrideLayout ? '!important' : ''};
+    word-spacing: ${wordSpacing}px ${overrideLayout ? '!important' : ''};
+    letter-spacing: ${letterSpacing}px ${overrideLayout ? '!important' : ''};
+    text-indent: ${textIndent}em ${overrideLayout ? '!important' : ''};
+    -webkit-hyphens: ${hyphenate ? 'auto' : 'manual'};
+    hyphens: ${hyphenate ? 'auto' : 'manual'};
+    -webkit-hyphenate-limit-before: 3;
+    -webkit-hyphenate-limit-after: 2;
+    -webkit-hyphenate-limit-lines: 2;
+    hanging-punctuation: allow-end last;
+    widows: 2;
+  }
+  li {
+    line-height: ${lineSpacing} ${overrideLayout ? '!important' : ''};
+    -webkit-hyphens: ${hyphenate ? 'auto' : 'manual'};
+    hyphens: ${hyphenate ? 'auto' : 'manual'};
+  }
+  p.aligned-center, blockquote.aligned-center,
+  dd.aligned-center, div.aligned-center {
+    text-align: center ${overrideLayout ? '!important' : ''};
+  }
+  p.aligned-left, blockquote.aligned-left,
+  dd.aligned-left, div.aligned-left {
+    ${justify && overrideLayout ? 'text-align: justify !important;' : ''}
+  }
+  p.aligned-right, blockquote.aligned-right,
+  dd.aligned-right, div.aligned-right {
+    text-align: right ${overrideLayout ? '!important' : ''};
+  }
+  p.aligned-justify, blockquote.aligned-justify,
+  dd.aligned-justify, div.aligned-justify {
+    ${!justify && overrideLayout ? 'text-align: initial !important;' : ''};
+  }
+  p:has(> img:only-child), p:has(> span:only-child > img:only-child),
+  p:has(> img:not(.has-text-siblings)),
+  p:has(> a:first-child + img:last-child) {
+    text-indent: initial !important;
+  }
+  blockquote[align="center"], div[align="center"],
+  p[align="center"], dd[align="center"],
+  p.aligned-center, blockquote.aligned-center,
+  dd.aligned-center, div.aligned-center,
+  li p, ol p, ul p, td p {
+    text-indent: initial !important;
+  }
+  p {
+    ${vertical ? `margin-left: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
+    ${vertical ? `margin-right: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
+    ${vertical ? `margin-top: unset ${overrideLayout ? '!important' : ''};` : ''}
+    ${vertical ? `margin-bottom: unset ${overrideLayout ? '!important' : ''};` : ''}
+    ${!vertical ? `margin-top: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
+    ${!vertical ? `margin-bottom: ${paragraphMargin}em ${overrideLayout ? '!important' : ''};` : ''}
+    ${!vertical ? `margin-left: unset ${overrideLayout ? '!important' : ''};` : ''}
+    ${!vertical ? `margin-right: unset ${overrideLayout ? '!important' : ''};` : ''}
+  }
+  div {
+    ${vertical && overrideLayout ? `margin-left: ${paragraphMargin}em !important;` : ''}
+    ${vertical && overrideLayout ? `margin-right: ${paragraphMargin}em !important;` : ''}
+    ${!vertical && overrideLayout ? `margin-top: ${paragraphMargin}em !important;` : ''}
+    ${!vertical && overrideLayout ? `margin-bottom: ${paragraphMargin}em !important;` : ''}
+  }
+
+  :lang(zh), :lang(ja), :lang(ko) {
+    widows: 1;
+    orphans: 1;
+  }
+
+  /* workaround for some badly designed epubs */
+  div.left *, p.left * { text-align: left; }
+  div.right *, p.right * { text-align: right; }
+  div.center *, p.center * { text-align: center; }
+  div.justify *, p.justify * { text-align: justify; }
+
+  img.pi {
+    ${vertical ? 'transform: rotate(90deg);' : ''}
+    ${vertical ? 'transform-origin: center;' : ''}
+    ${vertical ? 'height: 2em;' : ''}
+    ${vertical ? `width: ${lineSpacing}em;` : ''}
+    ${vertical ? `vertical-align: unset;` : ''}
+  }
 
   .nonindent, .noindent {
     text-indent: unset !important;
   }
 `;
-  return layoutStyle;
-};
 
 export const getFootnoteStyles = () => `
   .duokan-footnote-content,
@@ -473,6 +489,7 @@ export const getFootnoteStyles = () => `
 
   body {
     padding: 1em !important;
+    overflow-wrap: break-word;
   }
 
   a:any-link {
@@ -545,8 +562,8 @@ export const getThemeCode = () => {
   if (typeof window !== 'undefined') {
     themeColor = localStorage.getItem('themeColor') || 'default';
     themeMode = localStorage.getItem('themeMode') || 'auto';
+    systemIsDarkMode = localStorage.getItem('systemIsDarkMode') === 'true';
     customThemes = JSON.parse(localStorage.getItem('customThemes') || '[]');
-    systemIsDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
   const isDarkMode = themeMode === 'dark' || (themeMode === 'auto' && systemIsDarkMode);
   let currentTheme = themes.find((theme) => theme.name === themeColor);
@@ -578,23 +595,28 @@ export const getStyles = (viewSettings: ViewSettings, themeCode?: ThemeCode) => 
   if (!themeCode) {
     themeCode = getThemeCode();
   }
-  const layoutStyles = getLayoutStyles(
-    viewSettings.overrideLayout!,
+  const pageLayoutStyles = getPageLayoutStyles(
     viewSettings.marginTopPx,
     viewSettings.marginRightPx,
     viewSettings.marginBottomPx,
     viewSettings.marginLeftPx,
-    viewSettings.paragraphMargin!,
-    viewSettings.lineHeight!,
-    viewSettings.wordSpacing!,
-    viewSettings.letterSpacing!,
-    viewSettings.textIndent!,
-    viewSettings.fullJustification!,
-    viewSettings.hyphenation!,
     1.0,
     viewSettings.writingMode!,
     viewSettings.vertical!,
   );
+  const paragraphLayoutStyles = viewSettings.useBookLayout
+    ? ''
+    : getParagraphLayoutStyles(
+        viewSettings.overrideLayout!,
+        viewSettings.paragraphMargin!,
+        viewSettings.lineHeight!,
+        viewSettings.wordSpacing!,
+        viewSettings.letterSpacing!,
+        viewSettings.textIndent!,
+        viewSettings.fullJustification!,
+        viewSettings.hyphenation!,
+        viewSettings.vertical!,
+      );
   // scale the font size on-the-fly so that we can sync the same font size on different devices
   const isMobile = ['ios', 'android'].includes(getOSPlatform());
   const fontScale = isMobile ? 1.25 : 1;
@@ -620,7 +642,7 @@ export const getStyles = (viewSettings: ViewSettings, themeCode?: ThemeCode) => 
   );
   const translationStyles = getTranslationStyles(viewSettings.showTranslateSource!);
   const userStylesheet = viewSettings.userStylesheet!;
-  return `${layoutStyles}\n${fontStyles}\n${colorStyles}\n${translationStyles}\n${userStylesheet}`;
+  return `${pageLayoutStyles}\n${paragraphLayoutStyles}\n${fontStyles}\n${colorStyles}\n${translationStyles}\n${userStylesheet}`;
 };
 
 export const applyTranslationStyle = (viewSettings: ViewSettings) => {
@@ -716,25 +738,17 @@ export const transformStylesheet = (css: string, vw: number, vh: number, vertica
       if (!/display\s*:/.test(block)) {
         block = block.replace(/}$/, ' display: flow-root !important; }');
       }
-      if (!/width\s*:/.test(block) && directions.includes('left') && directions.includes('right')) {
+      if (directions.includes('left') && directions.includes('right')) {
         block = block
-          .replace(
-            /}$/,
-            ' width: calc(var(--_max-width) + var(--page-margin-left) + var(--page-margin-right)) !important; }',
-          )
-          .replace(/}$/, ' max-width: calc(var(--full-width) * 1px) !important; }');
+          .replace(/}$/, ' width: calc(var(--available-width) * 1px) !important; }')
+          .replace(/}$/, ' min-width: calc(var(--available-width) * 1px) !important; }')
+          .replace(/}$/, ' max-width: calc(var(--available-width) * 1px) !important; }');
       }
-      if (
-        !/height\s*:/.test(block) &&
-        directions.includes('top') &&
-        directions.includes('bottom')
-      ) {
+      if (directions.includes('top') && directions.includes('bottom')) {
         block = block
-          .replace(
-            /}$/,
-            ' height: calc(100% + var(--page-margin-top) + var(--page-margin-bottom)) !important; }',
-          )
-          .replace(/}$/, ' max-height: calc(var(--full-height) * 1px) !important; }');
+          .replace(/}$/, ' height: calc(var(--available-height) * 1px) !important; }')
+          .replace(/}$/, ' min-height: calc(var(--available-height) * 1px) !important; }')
+          .replace(/}$/, ' max-height: calc(var(--available-height) * 1px) !important; }');
       }
     }
     return selector + block;
@@ -753,6 +767,20 @@ export const transformStylesheet = (css: string, vw: number, vh: number, vertica
       }
     }
     return selector + block;
+  });
+
+  // clip hardcoded pixel widths to available width when they exceed viewport
+  css = css.replace(ruleRegex, (match, selector, block) => {
+    const widthMatch = /(?:^|[^a-z-])width\s*:\s*(\d+(?:\.\d+)?)px/.exec(block);
+    const pxWidth = widthMatch ? parseFloat(widthMatch[1] ?? '0') : 0;
+    if (pxWidth > vw && !/max-width\s*:/.test(block)) {
+      block = block.replace(
+        /}$/,
+        ' width: 100%; max-width: calc(var(--available-width) * 1px); box-sizing: border-box; }',
+      );
+      return selector + block;
+    }
+    return match;
   });
 
   // replace absolute font sizes with rem units
@@ -778,6 +806,8 @@ export const transformStylesheet = (css: string, vw: number, vh: number, vertica
     .replace(/font-size\s*:\s*(\d*\.?\d+)(px|rem|em|%)?/gi, (_, size, unit = 'px') => {
       return `font-size: max(${size}${unit}, var(--min-font-size, 8px))`;
     })
+    // remove no-op backdrop-filter: brightness(100%); see #3895
+    .replace(/backdrop-filter\s*:\s*brightness\(100%\)\s*[;]?/gi, '')
     .replace(/(\d*\.?\d+)vw/gi, (_, d) => (parseFloat(d) * vw) / 100 + 'px')
     .replace(/(\d*\.?\d+)vh/gi, (_, d) => (parseFloat(d) * vh) / 100 + 'px')
     .replace(/([\s;])-webkit-user-select\s*:\s*none/gi, '$1-webkit-user-select: unset')
@@ -786,9 +816,9 @@ export const transformStylesheet = (css: string, vw: number, vh: number, vertica
     .replace(/([\s;])-o-user-select\s*:\s*none/gi, '$1-o-user-select: unset')
     .replace(/([\s;])user-select\s*:\s*none/gi, '$1user-select: unset')
     .replace(/(font-family\s*:[^;]*?)\bsans-serif\b/gi, '$1READEST_SS_PLACEHOLDER')
-    .replace(/(font-family\s*:[^;]*?)\bserif\b(?!-)/gi, '$1var(--serif)')
-    .replace(/READEST_SS_PLACEHOLDER/g, 'var(--sans-serif)')
-    .replace(/(font-family\s*:[^;]*?)\bmonospace\b/gi, '$1var(--monospace)')
+    .replace(/(font-family\s*:[^;]*?)\bserif\b(?!-)/gi, '$1var(--serif, serif)')
+    .replace(/READEST_SS_PLACEHOLDER/g, 'var(--sans-serif, sans-serif)')
+    .replace(/(font-family\s*:[^;]*?)\bmonospace\b/gi, '$1var(--monospace, monospace)')
     .replace(/([\s;])font-weight\s*:\s*normal/gi, '$1font-weight: var(--font-weight)')
     .replace(/([\s;])color\s*:\s*black/gi, '$1color: var(--theme-fg-color)')
     .replace(/([\s;])color\s*:\s*#000000/gi, '$1color: var(--theme-fg-color)')
@@ -805,6 +835,27 @@ export const applyThemeModeClass = (document: Document, isDarkMode: boolean) => 
 export const applyScrollModeClass = (document: Document, isScrollMode: boolean) => {
   document.body.classList.remove('scroll-mode', 'paginated-mode');
   document.body.classList.add(isScrollMode ? 'scroll-mode' : 'paginated-mode');
+};
+
+/**
+  @param document should be the global `document`
+*/
+export const applyScrollbarStyle = (document: Document, hideScrollbar: boolean) => {
+  const styleId = 'scrollbar-hide-style';
+  let styleEl = document.getElementById(styleId) as HTMLStyleElement;
+
+  if (hideScrollbar) {
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = 'foliate-view::part(container) { scrollbar-width: none; }';
+  } else {
+    if (styleEl) {
+      styleEl.textContent = 'foliate-view::part(container) { scrollbar-width: thin; }';
+    }
+  }
 };
 
 export const applyImageStyle = (document: Document) => {
@@ -883,16 +934,6 @@ export const applyTableStyle = (document: Document) => {
       }
     }
 
-    const computedTableStyle = window.getComputedStyle(table);
-    const computedWidth = computedTableStyle.width;
-    if (computedWidth && computedWidth !== 'auto' && computedWidth !== '0px') {
-      const widthValue = parseFloat(computedWidth);
-      const widthUnit = computedWidth.replace(widthValue.toString(), '').trim();
-      if (widthUnit !== '%') {
-        // Workaround for hardcoded table layout, closes #3205
-        table.style.width = `calc(min(${computedWidth}, var(--available-width)))`;
-      }
-    }
     const parentWidth = window.getComputedStyle(parent as Element).width;
     const parentContainerWidth = parseFloat(parentWidth) || 0;
     if (totalTableWidth > 0) {

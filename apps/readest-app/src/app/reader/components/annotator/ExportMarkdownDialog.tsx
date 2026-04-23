@@ -7,7 +7,7 @@ import { useReaderStore } from '@/store/readerStore';
 import { BookNote, BooknoteGroup, NoteExportConfig } from '@/types/book';
 import { DEFAULT_NOTE_EXPORT_CONFIG } from '@/services/constants';
 import { saveViewSettings } from '@/helpers/settings';
-import { renderNoteTemplate } from '@/utils/note';
+import { renderNoteTemplate, formatBlockQuote } from '@/utils/note';
 import Dialog from '@/components/Dialog';
 
 interface ExportMarkdownDialogProps {
@@ -118,7 +118,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
       const templateData = {
         title: bookTitle,
         author: bookAuthor,
-        exportDate: new Date().getTime(),
+        exportDate: Date.now(),
         chapters: sortedGroups.map((group) => ({
           title: group.label || _('Untitled'),
           annotations: group.booknotes.map((note) => ({
@@ -175,7 +175,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
         for (const note of group.booknotes) {
           // Add quote
           if (exportConfig.includeQuotes && note.text) {
-            lines.push(`> ${note.text}`);
+            lines.push(formatBlockQuote(note.text));
           }
 
           // Add note
@@ -195,7 +195,10 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
           }
           if (pageStr || timestampStr) {
             lines.push('');
-            const infoStr = pageStr ? `${pageStr} · ${timestampStr}`.trim() : timestampStr;
+            const infoStr =
+              pageStr && timestampStr
+                ? `${pageStr} · ${timestampStr}`.trim()
+                : pageStr || timestampStr;
             lines.push(`*${infoStr}*`);
           }
 
@@ -489,6 +492,60 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
                         <li className='ml-8'>
                           <code className='bg-base-300 rounded px-1'>annotation.timestamp</code> -{' '}
                           {_('Annotation time')}
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className='mb-2 font-bold'>{_('Available Formatters:')}</p>
+                      <ul className='space-y-1 font-mono'>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>date</code> /{' '}
+                          <code className='bg-base-300 rounded px-1'>{"date('%Y-%m-%d')"}</code> -{' '}
+                          {_('Format date')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>blockquote</code> -{' '}
+                          {_('Markdown block quote (> per line)')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>nl2br</code> -{' '}
+                          {_('Newlines to <br>')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>upper</code> /{' '}
+                          <code className='bg-base-300 rounded px-1'>lower</code> /{' '}
+                          <code className='bg-base-300 rounded px-1'>capitalize</code> /{' '}
+                          <code className='bg-base-300 rounded px-1'>title</code> -{' '}
+                          {_('Change case')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>trim</code> -{' '}
+                          {_('Trim whitespace')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>truncate(n)</code> -{' '}
+                          {_('Truncate to n characters')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>{"replace('a', 'b')"}</code> -{' '}
+                          {_('Replace text')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>default(val)</code> -{' '}
+                          {_('Fallback value')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>length</code> -{' '}
+                          {_('Get length')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>first</code> /{' '}
+                          <code className='bg-base-300 rounded px-1'>last</code> -{' '}
+                          {_('First/last element')}
+                        </li>
+                        <li>
+                          <code className='bg-base-300 rounded px-1'>{"join(', ')"}</code> -{' '}
+                          {_('Join array')}
                         </li>
                       </ul>
                     </div>

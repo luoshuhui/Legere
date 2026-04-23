@@ -15,6 +15,7 @@ import { genSSMLRaw, parseSSMLLang } from '@/utils/ssml';
 import { throttle } from '@/utils/throttle';
 import { isCfiInLocation } from '@/utils/cfi';
 import { getLocale } from '@/utils/misc';
+import { buildTTSMediaMetadata } from '@/utils/ttsMetadata';
 import { invokeUseBackgroundAudio } from '@/utils/bridge';
 import { estimateTTSTime } from '@/utils/ttsTime';
 import { useTTSMediaSession } from './useTTSMediaSession';
@@ -47,7 +48,9 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
 
   const followingTTSLocationRef = useRef(true);
   const sectionChangingTimestampRef = useRef(0);
+  const previousSectionLabelRef = useRef<string | undefined>(undefined);
   const ttsControllerRef = useRef<TTSController | null>(null);
+  const isStartingTTSRef = useRef(false);
   const [ttsController, setTtsController] = useState<TTSController | null>(null);
   const [ttsClientsInited, setTtsClientsInitialized] = useState(false);
 
@@ -59,12 +62,56 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
     deinitMediaSession,
   } = useTTSMediaSession({ bookKey });
 
+  const handleTTSForward = async (event: CustomEvent) => {
+    const detail = event.detail as { bookKey: string; byMark?: boolean } | undefined;
+    if (detail?.bookKey !== bookKey) return;
+    const ttsController = ttsControllerRef.current;
+    if (ttsController) {
+      await ttsController.forward(detail?.byMark ?? false);
+    }
+  };
+
+  const handleTTSBackward = async (event: CustomEvent) => {
+    const detail = event.detail as { bookKey: string; byMark?: boolean } | undefined;
+    if (detail?.bookKey !== bookKey) return;
+    const ttsController = ttsControllerRef.current;
+    if (ttsController) {
+      await ttsController.backward(detail?.byMark ?? false);
+    }
+  };
+
+  const handleTTSTogglePlay = async (event: CustomEvent) => {
+    const detail = event.detail as { bookKey: string } | undefined;
+    if (detail?.bookKey !== bookKey) return;
+    const ttsController = ttsControllerRef.current;
+    if (!ttsController) return;
+    if (ttsController.state === 'playing') {
+      setIsPlaying(false);
+      setIsPaused(true);
+      await ttsController.pause();
+    } else {
+      setIsPlaying(true);
+      setIsPaused(false);
+      if (ttsController.state === 'paused') {
+        await ttsController.resume();
+      } else {
+        await ttsController.start();
+      }
+    }
+  };
+
   useEffect(() => {
     eventDispatcher.on('tts-speak', handleTTSSpeak);
     eventDispatcher.on('tts-stop', handleTTSStop);
+    eventDispatcher.on('tts-forward', handleTTSForward);
+    eventDispatcher.on('tts-backward', handleTTSBackward);
+    eventDispatcher.on('tts-toggle-play', handleTTSTogglePlay);
     return () => {
       eventDispatcher.off('tts-speak', handleTTSSpeak);
       eventDispatcher.off('tts-stop', handleTTSStop);
+      eventDispatcher.off('tts-forward', handleTTSForward);
+      eventDispatcher.off('tts-backward', handleTTSBackward);
+      eventDispatcher.off('tts-toggle-play', handleTTSTogglePlay);
       if (ttsControllerRef.current) {
         ttsControllerRef.current.shutdown();
         ttsControllerRef.current = null;
@@ -90,23 +137,39 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
 
     const handleSpeakMark = (e: Event) => {
       const progress = getProgress(bookKey);
+      const viewSettings = getViewSettings(bookKey);
       const { sectionLabel } = progress || {};
       const mark = (e as CustomEvent<TTSMark>).detail;
+      const ttsMediaMetadata = viewSettings?.ttsMediaMetadata ?? 'sentence';
 
-      if (mediaSessionRef.current) {
+      const metadata = buildTTSMediaMetadata({
+        markText: mark?.text || '',
+        markName: mark?.name || '',
+        sectionLabel: sectionLabel || '',
+        title,
+        author,
+        ttsMediaMetadata,
+        previousSectionLabel: previousSectionLabelRef.current,
+      });
+
+      if (ttsMediaMetadata === 'chapter') {
+        previousSectionLabelRef.current = sectionLabel;
+      }
+
+      if (metadata.shouldUpdate && mediaSessionRef.current) {
         const mediaSession = mediaSessionRef.current;
         if (mediaSession instanceof TauriMediaSession) {
           mediaSession.updateMetadata({
-            title: mark?.text || '',
-            artist: sectionLabel || title,
-            album: author,
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
             artwork: '',
           });
         } else {
           mediaSession.metadata = new MediaMetadata({
-            title: mark?.text || '',
-            artist: sectionLabel || title,
-            album: author,
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
             artwork: [{ src: coverImageUrl || '/icon.png', sizes: '512x512', type: 'image/png' }],
           });
         }
@@ -131,7 +194,10 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
         return;
       }
 
-      const { doc, index: viewSectionIndex } = view.renderer.getContents()[0] as {
+      const hlContents = view.renderer.getContents();
+      const hlPrimaryIdx = view.renderer.primaryIndex;
+      const { doc, index: viewSectionIndex } = (hlContents.find((x) => x.index === hlPrimaryIdx) ??
+        hlContents[0]) as {
         doc: Document;
         index?: number;
       };
@@ -143,14 +209,12 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
 
       const range = anchor(doc);
       if (!view.renderer.scrolled) {
-        view.renderer.scrollToAnchor(range);
+        view.renderer.scrollToAnchor?.(range);
       } else {
         const rect = range.getBoundingClientRect();
-        const { start, size, viewSize, sideProp } = view.renderer;
-        const positionStart = rect[sideProp === 'height' ? 'y' : 'x'] + viewSettings.marginTopPx;
-        const positionEnd = rect[sideProp === 'height' ? 'height' : 'width'] + positionStart;
-        const offsetStart = view.book.dir === 'rtl' ? viewSize - positionStart : positionStart;
-        const offsetEnd = view.book.dir === 'rtl' ? viewSize - positionEnd : positionEnd;
+        const { start, end, sideProp } = view.renderer;
+        const rangeTop = rect[sideProp === 'height' ? 'y' : 'x'];
+        const rangeBottom = rangeTop + rect[sideProp === 'height' ? 'height' : 'width'];
 
         const showHeader = viewSettings.showHeader;
         const showFooter = viewSettings.showFooter;
@@ -158,11 +222,11 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
         const headerScrollOverlap = showHeader && showBarsOnScroll ? 44 : 0;
         const footerScrollOverlap = showFooter && showBarsOnScroll ? 44 : 0;
         const scrollingOverlap = viewSettings.scrollingOverlap;
-        const endInNextView = offsetEnd > start + size - footerScrollOverlap - scrollingOverlap;
-        const startInPrevView = offsetStart < start + headerScrollOverlap + scrollingOverlap;
-        if (endInNextView || startInPrevView) {
-          const scrollTo = offsetStart - headerScrollOverlap - scrollingOverlap;
-          view.renderer.scrollToAnchor(scrollTo / viewSize);
+        const outOfView =
+          rangeBottom > end - footerScrollOverlap - scrollingOverlap ||
+          rangeTop < start + headerScrollOverlap + scrollingOverlap;
+        if (outOfView) {
+          view.renderer.scrollToAnchor?.(range);
         }
       }
     };
@@ -225,6 +289,7 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
   };
 
   const viewSettings = getViewSettings(bookKey);
+  const bookData = getBookData(bookKey);
   const ttsTime = useMemo(() => {
     const rate = viewSettings?.ttsRate ?? 1;
     return estimateTTSTime(progress, rate);
@@ -236,7 +301,6 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
     if (vs?.translationEnabled && ttsReadAloudText === 'translated') {
       return vs?.translateTargetLang || getLocale();
     } else if (vs?.translationEnabled && ttsReadAloudText === 'source') {
-      const bookData = getBookData(bookKey);
       return bookData?.book?.primaryLanguage || '';
     }
     return null;
@@ -260,6 +324,7 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
       bookKey,
       viewSettings: getViewSettings(bookKey)!,
       userLocale: getLocale(),
+      isFixedLayout: bookData?.isFixedLayout || false,
       content: '',
       transformers: [],
       reversePunctuationTransform: true,
@@ -319,7 +384,7 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
   useEffect(() => {
     const ttsHighlightOptions = viewSettings?.ttsHighlightOptions;
     if (ttsControllerRef.current && ttsHighlightOptions) {
-      ttsControllerRef.current.initViewTTS(
+      ttsControllerRef.current.updateHighlightOptions(
         getTTSHighlightOptions(ttsHighlightOptions, viewSettings!.isEink),
       );
     }
@@ -340,6 +405,7 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
         setShowIndicator(false);
         setShowBackToCurrentTTSLocation(false);
       }
+      previousSectionLabelRef.current = undefined;
       if (appService?.isIOSApp) {
         await invokeUseBackgroundAudio({ enabled: false });
       }
@@ -355,66 +421,41 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
 
   // handleTTSSpeak / handleTTSStop (plain functions, registered once at mount via closure)
   const handleTTSSpeak = async (event: CustomEvent) => {
-    const { bookKey: ttsBookKey, range, oneTime = false } = event.detail;
+    const { bookKey: ttsBookKey, range, index, oneTime = false } = event.detail;
     if (bookKey !== ttsBookKey) return;
-
-    const view = getView(bookKey);
-    const progress = getProgress(bookKey);
-    const viewSettings = getViewSettings(bookKey);
-    const bookData = getBookData(bookKey);
-    const { location } = progress || {};
-    if (!view || !progress || !viewSettings || !bookData || !bookData.book) return;
-    if (bookData.book?.format === 'PDF') {
-      eventDispatcher.dispatch('toast', {
-        message: _('TTS not supported for PDF'),
-        type: 'warning',
-      });
-      return;
-    }
-
-    const ttsSpeakRange = range as Range | null;
-    let ttsFromRange = ttsSpeakRange;
-    if (!ttsFromRange && viewSettings.ttsLocation) {
-      const ttsCfi = viewSettings.ttsLocation;
-      if (isCfiInLocation(ttsCfi, location)) {
-        const { index, anchor } = view.resolveCFI(ttsCfi);
-        const { doc } = view.renderer.getContents().find((x) => x.index === index) || {};
-        if (doc) {
-          ttsFromRange = anchor(doc);
-        }
-      }
-    }
-    if (!ttsFromRange) {
-      ttsFromRange = progress.range;
-    }
-
-    const currentSection = view.renderer.getContents()[0];
-    if (ttsFromRange && currentSection) {
-      const ttsLocation = view.getCFI(currentSection?.index || 0, ttsFromRange);
-      viewSettings.ttsLocation = ttsLocation;
-      setViewSettings(bookKey, viewSettings);
-      if (isCfiInLocation(ttsLocation, location)) {
-        setShowBackToCurrentTTSLocation(false);
-      }
-    }
-
-    const primaryLang = bookData.book.primaryLanguage;
-
-    if (ttsControllerRef.current) {
-      ttsControllerRef.current.stop();
-      ttsControllerRef.current = null;
-    }
+    // Guard against concurrent starts (e.g. rapid double-clicks on the TTS
+    // icon). Without this, both invocations race past the `await`s below and
+    // end up creating two TTSController instances that speak simultaneously.
+    if (isStartingTTSRef.current) return;
+    isStartingTTSRef.current = true;
 
     try {
-      if (appService?.isIOSApp) {
-        await invokeUseBackgroundAudio({ enabled: true });
+      const view = getView(bookKey);
+      const progress = getProgress(bookKey);
+      const viewSettings = getViewSettings(bookKey);
+      const bookData = getBookData(bookKey);
+      const { location } = progress || {};
+      if (!view || !progress || !viewSettings || !bookData || !bookData.book) return;
+      const ttsSpeakRange = range as Range | null;
+      let ttsFromRange = ttsSpeakRange;
+      let ttsFromIndex = typeof index === 'number' ? index : null;
+      if (!ttsFromRange && viewSettings.ttsLocation) {
+        const ttsCfi = viewSettings.ttsLocation;
+        if (isCfiInLocation(ttsCfi, location)) {
+          const { index, anchor } = view.resolveCFI(ttsCfi);
+          const { doc } = view.renderer.getContents().find((x) => x.index === index) || {};
+          if (doc) {
+            ttsFromRange = anchor(doc);
+            ttsFromIndex = index;
+          }
+        }
       }
-      if (appService?.isMobile) {
-        unblockAudio();
-      }
-      await initMediaSession();
-      setTtsClientsInitialized(false);
 
+      if (!ttsFromIndex) {
+        ttsFromIndex = progress.index;
+      }
+
+<<<<<<< HEAD
       setShowIndicator(true);
       const ttsController = new TTSController(
         appService,
@@ -446,15 +487,82 @@ export const useTTSControl = ({ bookKey, onRequestHidePanel }: UseTTSControlProp
         ttsController.setRate(viewSettings.ttsRate);
         ttsController.speak(ssml, oneTime, () => handleStop(bookKey));
         ttsController.setTargetLang(getTTSTargetLang() || '');
+=======
+      if (!ttsFromRange && !bookData.isFixedLayout) {
+        ttsFromRange = progress.range;
+>>>>>>> upstream/main
       }
-      setTtsClientsInitialized(true);
-      setTTSEnabled(bookKey, true);
-    } catch (error) {
-      eventDispatcher.dispatch('toast', {
-        message: _('TTS not supported for this document'),
-        type: 'error',
-      });
-      console.error(error);
+
+      const currentSection = view.renderer.getContents().find((x) => x.index === ttsFromIndex);
+      if (ttsFromRange && currentSection) {
+        const ttsLocation = view.getCFI(currentSection?.index || 0, ttsFromRange);
+        viewSettings.ttsLocation = ttsLocation;
+        setViewSettings(bookKey, viewSettings);
+        if (isCfiInLocation(ttsLocation, location)) {
+          setShowBackToCurrentTTSLocation(false);
+        }
+      }
+
+      const primaryLang = bookData.book.primaryLanguage;
+
+      if (ttsControllerRef.current) {
+        ttsControllerRef.current.stop();
+        ttsControllerRef.current = null;
+      }
+
+      try {
+        if (appService?.isIOSApp) {
+          await invokeUseBackgroundAudio({ enabled: true });
+        }
+        if (appService?.isMobile) {
+          unblockAudio();
+        }
+        await initMediaSession();
+        setTtsClientsInitialized(false);
+
+        setShowIndicator(true);
+        const ttsController = new TTSController(
+          appService,
+          view,
+          !!user?.id,
+          preprocessSSMLForTTS,
+          handleSectionChange,
+        );
+        ttsControllerRef.current = ttsController;
+        setTtsController(ttsController);
+
+        await ttsController.init();
+        await ttsController.initViewTTS(ttsFromIndex);
+        ttsController.updateHighlightOptions(
+          getTTSHighlightOptions(viewSettings.ttsHighlightOptions, viewSettings.isEink),
+        );
+        const ssml =
+          oneTime && ttsSpeakRange
+            ? genSSMLRaw(ttsSpeakRange.toString().trim())
+            : ttsFromRange
+              ? view.tts?.from(ttsFromRange)
+              : view.tts?.start();
+        if (ssml) {
+          const lang = parseSSMLLang(ssml, primaryLang) || 'en';
+          setIsPlaying(true);
+          setTtsLang(lang);
+
+          ttsController.setLang(lang);
+          ttsController.setRate(viewSettings.ttsRate);
+          ttsController.speak(ssml, oneTime, () => handleStop(bookKey));
+          ttsController.setTargetLang(getTTSTargetLang() || '');
+        }
+        setTtsClientsInitialized(true);
+        setTTSEnabled(bookKey, true);
+      } catch (error) {
+        eventDispatcher.dispatch('toast', {
+          message: _('TTS not supported for this document'),
+          type: 'error',
+        });
+        console.error(error);
+      }
+    } finally {
+      isStartingTTSRef.current = false;
     }
   };
 

@@ -13,7 +13,7 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { eventDispatcher } from '@/utils/event';
-import { NOTE_PREFIX } from '@/types/view';
+import { removeBookNoteOverlays } from '../../utils/annotatorUtil';
 import useScrollToItem from '../../hooks/useScrollToItem';
 import TextButton from '@/components/TextButton';
 import TextEditor, { TextEditorRef } from '@/components/TextEditor';
@@ -21,10 +21,11 @@ import TextEditor, { TextEditorRef } from '@/components/TextEditor';
 interface BooknoteItemProps {
   bookKey: string;
   item: BookNote;
+  isNearest?: boolean;
   onClick?: () => void;
 }
 
-const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, onClick }) => {
+const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, onClick }) => {
   const _ = useTranslation();
   const { envConfig } = useEnv();
   const { settings } = useSettingsStore();
@@ -43,7 +44,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, onClick }) =
   const size18 = useResponsiveSize(18);
 
   const progress = getProgress(bookKey);
-  const { isCurrent, viewRef } = useScrollToItem(cfi, progress);
+  const { isCurrent, viewRef } = useScrollToItem(cfi, progress, isNearest);
 
   const handleClickItem = (event: React.MouseEvent | React.KeyboardEvent) => {
     event.preventDefault();
@@ -65,9 +66,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, onClick }) =
       if (item.id === note.id) {
         item.deletedAt = Date.now();
         const views = getViewsById(bookKey.split('-')[0]!);
-        views.forEach((view) =>
-          view?.addAnnotation({ ...item, value: `${NOTE_PREFIX}${item.cfi}` }, true),
-        );
+        views.forEach((view) => removeBookNoteOverlays(view, item));
       }
     });
     const updatedConfig = updateBooknotes(bookKey, booknotes);

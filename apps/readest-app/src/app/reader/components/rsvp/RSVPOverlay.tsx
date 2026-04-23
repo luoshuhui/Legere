@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import clsx from 'clsx';
 import { Insets } from '@/types/misc';
-import { RsvpState, RsvpWord, RSVPController } from '@/services/rsvp';
+import { RsvpState, RSVPController } from '@/services/rsvp';
 import { useThemeStore } from '@/store/themeStore';
 import { TOCItem } from '@/libs/document';
 import {
@@ -14,6 +14,8 @@ import {
   IoPlaySkipForward,
   IoRemove,
   IoAdd,
+  IoChevronDown,
+  IoSettingsSharp,
 } from 'react-icons/io5';
 import { useTranslation } from '@/hooks/useTranslation';
 import { Overlay } from '@/components/Overlay';
@@ -23,6 +25,28 @@ interface FlatChapter {
   href: string;
   level: number;
 }
+
+// Display settings
+const FONT_SIZE_OPTIONS = [1.25, 1.5, 1.875, 2.25, 3, 3.75, 4.25, 5, 6, 8];
+const DEFAULT_FONT_SIZE_INDEX = 4;
+const ORP_COLOR_OPTIONS = ['', '#EF4444', '#3B82F6', '#22C55E', '#F97316', '#A855F7'];
+const STORAGE_KEY_FONT_SIZE = 'readest_rsvp_fontsize';
+const STORAGE_KEY_ORP_COLOR = 'readest_rsvp_orp_color';
+const STORAGE_KEY_CONTEXT = 'readest_rsvp_context';
+
+// Context window: render only a sliding window of words around the current index.
+// Why: full-chapter rendering can be thousands of spans, and iOS WebKit's layout cost
+// for getBoundingClientRect (used by auto-scroll) scales with DOM size, which throttles
+// the word-advance interval well below the configured WPM.
+const CONTEXT_WINDOW_SIZE = 500;
+const CONTEXT_WINDOW_SLIDE_THRESHOLD = 100;
+
+const computeContextWindow = (total: number, currentIndex: number) => {
+  if (total <= CONTEXT_WINDOW_SIZE) return { start: 0, end: total };
+  const half = Math.floor(CONTEXT_WINDOW_SIZE / 2);
+  const start = Math.max(0, Math.min(total - CONTEXT_WINDOW_SIZE, currentIndex - half));
+  return { start, end: start + CONTEXT_WINDOW_SIZE };
+};
 
 interface RSVPOverlayProps {
   gridInsets: Insets;
@@ -46,12 +70,54 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
   const _ = useTranslation();
   const { themeCode, isDarkMode: _isDarkMode } = useThemeStore();
   const [state, setState] = useState<RsvpState>(controller.currentState);
-  const [currentWord, setCurrentWord] = useState<RsvpWord | null>(controller.currentWord);
+  const currentWord = controller.currentDisplayWord;
   const [countdown, setCountdown] = useState<number | null>(controller.currentCountdown);
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
+  const chapterDropdownRef = useRef<HTMLDivElement>(null);
+  const [showWpmDropdown, setShowWpmDropdown] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [contextCollapsed, setContextCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_CONTEXT) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [fontSizeIndex, setFontSizeIndex] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_FONT_SIZE);
+      if (saved !== null) {
+        const idx = parseInt(saved, 10);
+        if (idx >= 0 && idx < FONT_SIZE_OPTIONS.length) return idx;
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_FONT_SIZE_INDEX;
+  });
+  const [orpColorIndex, setOrpColorIndex] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ORP_COLOR);
+      if (saved !== null) {
+        const idx = parseInt(saved, 10);
+        if (idx >= 0 && idx < ORP_COLOR_OPTIONS.length) return idx;
+      }
+    } catch {
+      /* ignore */
+    }
+    return 0;
+  });
+  const [contextWindow, setContextWindow] = useState(() =>
+    computeContextWindow(state.words.length, state.currentIndex),
+  );
+  const contextWordRef = useRef<HTMLSpanElement>(null);
+  const contextPanelRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
+  const isDraggingProgressBar = useRef(false);
+  const wasPlayingBeforeDrag = useRef(false);
+  const [isProgressBarDragging, setIsProgressBarDragging] = useState(false);
   const SWIPE_THRESHOLD = 50;
   const TAP_THRESHOLD = 10;
 
@@ -75,7 +141,6 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
     const handleStateChange = (e: Event) => {
       const newState = (e as CustomEvent<RsvpState>).detail;
       setState(newState);
-      setCurrentWord(controller.currentWord);
     };
 
     const handleCountdownChange = (e: Event) => {
@@ -149,6 +214,8 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
     return () => document.removeEventListener('keydown', handleKeyboard, { capture: true });
   }, [state.active, controller, onClose]);
 
+  const effectiveChapterHref = currentChapterHref;
+
   // Word display helpers
   const wordBefore = currentWord ? currentWord.text.substring(0, currentWord.orpIndex) : '';
   const orpChar = currentWord ? currentWord.text.charAt(currentWord.orpIndex) : '';
@@ -174,44 +241,115 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
     }
   }, [state]);
 
-  // Context text helpers - show 100 words before and after
-  const getContextBefore = useCallback((): string => {
-    if (!state || state.words.length === 0) return '';
-    const startIndex = Math.max(0, state.currentIndex - 100);
-    return state.words
-      .slice(startIndex, state.currentIndex)
-      .map((w) => w.text)
-      .join(' ');
-  }, [state]);
+  // Stable word list that only changes when contextWindow changes
+  const contextWords = useMemo(
+    () => state.words.slice(contextWindow.start, contextWindow.end),
+    [state.words, contextWindow],
+  );
 
-  const getContextAfter = useCallback((): string => {
-    if (!state || state.words.length === 0) return '';
-    const endIndex = Math.min(state.words.length, state.currentIndex + 101);
-    return state.words
-      .slice(state.currentIndex + 1, endIndex)
-      .map((w) => w.text)
-      .join(' ');
-  }, [state]);
+  // Slide/reset the context window as currentIndex moves or the chapter changes.
+  useEffect(() => {
+    const total = state.words.length;
+    const cur = state.currentIndex;
+    setContextWindow((prev) => {
+      if (total <= CONTEXT_WINDOW_SIZE) {
+        if (prev.start === 0 && prev.end === total) return prev;
+        return { start: 0, end: total };
+      }
+      const currentSize = prev.end - prev.start;
+      const outOfBounds = cur < prev.start || cur >= prev.end;
+      const nearStartEdge = prev.start > 0 && cur < prev.start + CONTEXT_WINDOW_SLIDE_THRESHOLD;
+      const nearEndEdge = prev.end < total && cur >= prev.end - CONTEXT_WINDOW_SLIDE_THRESHOLD;
+      const sizeMismatch = currentSize !== CONTEXT_WINDOW_SIZE || prev.end > total;
+      if (!outOfBounds && !nearStartEdge && !nearEndEdge && !sizeMismatch) return prev;
+      return computeContextWindow(total, cur);
+    });
+  }, [state.currentIndex, state.words]);
+
+  // Auto-scroll: keep highlighted word away from top/bottom edges
+  useEffect(() => {
+    const panel = contextPanelRef.current;
+    const word = contextWordRef.current;
+    if (contextCollapsed || !panel || !word) return;
+
+    const panelRect = panel.getBoundingClientRect();
+    const wordRect = word.getBoundingClientRect();
+    const margin = panelRect.height * 0.15;
+    const topLine = panelRect.top + margin;
+
+    if (wordRect.top < topLine) {
+      panel.scrollTop -= topLine - wordRect.top;
+    } else if (wordRect.bottom > panelRect.bottom - margin) {
+      panel.scrollTop += wordRect.top - topLine;
+    }
+  }, [state.currentIndex, contextCollapsed, contextWindow]);
+
+  useEffect(() => {
+    if (!showChapterDropdown) return;
+    const raf = requestAnimationFrame(() => {
+      const container = chapterDropdownRef.current;
+      if (!container) return;
+      const activeItem = container.querySelector<HTMLElement>('[data-active="true"]');
+      if (activeItem) {
+        activeItem.scrollIntoView({ block: 'center' });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [showChapterDropdown]);
+
+  const toggleContext = useCallback(() => {
+    setContextCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY_CONTEXT, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  const updateFontSize = useCallback((idx: number) => {
+    const clamped = Math.max(0, Math.min(FONT_SIZE_OPTIONS.length - 1, idx));
+    setFontSizeIndex(clamped);
+    try {
+      localStorage.setItem(STORAGE_KEY_FONT_SIZE, String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const updateOrpColor = useCallback((idx: number) => {
+    setOrpColorIndex(idx);
+    try {
+      localStorage.setItem(STORAGE_KEY_ORP_COLOR, String(idx));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Chapter helpers
   const getCurrentChapterLabel = useCallback((): string => {
-    if (!currentChapterHref) return _('Select Chapter');
-    const normalizedCurrent = currentChapterHref.split('#')[0]?.replace(/^\//, '') || '';
+    if (!effectiveChapterHref) return _('Select Chapter');
+    const exactMatch = flatChapters.find((c) => c.href === effectiveChapterHref);
+    if (exactMatch) return exactMatch.label;
+    const normalizedCurrent = effectiveChapterHref.split('#')[0]?.replace(/^\//, '') || '';
     const chapter = flatChapters.find((c) => {
       const normalizedHref = c.href.split('#')[0]?.replace(/^\//, '') || '';
       return normalizedHref === normalizedCurrent;
     });
     return chapter?.label || _('Select Chapter');
-  }, [_, currentChapterHref, flatChapters]);
+  }, [_, effectiveChapterHref, flatChapters]);
 
   const isChapterActive = useCallback(
     (href: string): boolean => {
-      if (!currentChapterHref) return false;
-      const normalizedCurrent = currentChapterHref.split('#')[0]?.replace(/^\//, '') || '';
+      if (!effectiveChapterHref) return false;
+      if (href === effectiveChapterHref) return true;
+      const normalizedCurrent = effectiveChapterHref.split('#')[0]?.replace(/^\//, '') || '';
       const normalizedHref = href.split('#')[0]?.replace(/^\//, '') || '';
       return normalizedHref === normalizedCurrent;
     },
-    [currentChapterHref],
+    [effectiveChapterHref],
   );
 
   // Touch handlers
@@ -259,23 +397,39 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
     }
   };
 
-  // Progress bar click handler
-  const handleProgressBarClick = (event: React.MouseEvent) => {
-    const target = event.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const percentage = (clickX / rect.width) * 100;
-
+  const handleWordClick = (wordIndex: number) => {
     const wasPlaying = state.playing;
-    if (wasPlaying) {
-      controller.pause();
-    }
+    if (wasPlaying) controller.pause();
+    controller.seekToIndex(wordIndex);
+    if (wasPlaying) setTimeout(() => controller.resume(), 50);
+  };
 
-    controller.seekToPosition(percentage);
+  const getProgressBarPercentage = (clientX: number, target: HTMLElement): number => {
+    const rect = target.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    return (x / rect.width) * 100;
+  };
 
-    if (wasPlaying) {
-      setTimeout(() => controller.resume(), 50);
-    }
+  const handleProgressBarPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    isDraggingProgressBar.current = true;
+    setIsProgressBarDragging(true);
+    wasPlayingBeforeDrag.current = state.playing;
+    if (state.playing) controller.pause();
+    controller.seekToPosition(getProgressBarPercentage(event.clientX, event.currentTarget));
+  };
+
+  const handleProgressBarPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingProgressBar.current) return;
+    controller.seekToPosition(getProgressBarPercentage(event.clientX, event.currentTarget));
+  };
+
+  const handleProgressBarPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingProgressBar.current) return;
+    isDraggingProgressBar.current = false;
+    setIsProgressBarDragging(false);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (wasPlayingBeforeDrag.current) setTimeout(() => controller.resume(), 50);
   };
 
   const handleChapterSelect = (href: string) => {
@@ -290,6 +444,9 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
   const bgColor = themeCode.bg;
   const fgColor = themeCode.fg;
   const accentColor = themeCode.primary;
+  const effectiveOrpColor = ORP_COLOR_OPTIONS[orpColorIndex] || accentColor;
+  const currentFontSize =
+    FONT_SIZE_OPTIONS[fontSizeIndex] ?? FONT_SIZE_OPTIONS[DEFAULT_FONT_SIZE_INDEX]!;
 
   return (
     <div
@@ -315,7 +472,7 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
         <button
           aria-label={_('Close Speed Reading')}
           title={_('Close')}
-          className='flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-500/20 active:scale-95'
+          className='flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-500/20'
           onClick={onClose}
         >
           <IoClose className='h-5 w-5' />
@@ -324,7 +481,7 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
         {/* Chapter selector */}
         <div className='relative min-w-0 flex-1'>
           <button
-            className='flex w-full items-center gap-1.5 rounded-full border border-gray-500/20 bg-gray-500/10 px-3 py-1.5 text-sm transition-colors hover:bg-gray-500/20 active:scale-[0.98]'
+            className='flex w-full items-center gap-1.5 rounded-full border border-gray-500/20 bg-gray-500/10 px-3 py-1.5 text-sm transition-colors hover:bg-gray-500/20'
             onClick={() => setShowChapterDropdown(!showChapterDropdown)}
           >
             <span className='min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left'>
@@ -344,12 +501,14 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
             <>
               <Overlay onDismiss={() => setShowChapterDropdown(false)} />
               <div
+                ref={chapterDropdownRef}
                 className='absolute left-0 right-0 top-full z-[100] mt-1.5 max-h-64 overflow-y-auto rounded-2xl border border-gray-500/20 px-2 shadow-2xl'
                 style={{ backgroundColor: bgColor }}
               >
                 {flatChapters.map((chapter, idx) => (
                   <button
                     key={`${chapter.href}-${idx}`}
+                    data-active={isChapterActive(chapter.href) ? 'true' : undefined}
                     className={clsx(
                       'block w-full rounded-md border-none bg-transparent px-4 py-2.5 text-left text-sm transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-gray-500/15',
                       isChapterActive(chapter.href) &&
@@ -366,42 +525,124 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
           )}
         </div>
 
-        {/* WPM badge */}
-        <div className='shrink-0 rounded-full border border-gray-500/20 bg-gray-500/10 px-3 py-1.5 text-sm tabular-nums'>
-          <span className='font-semibold'>{state.wpm}</span>
-          <span className='ml-0.5 text-xs opacity-50'>WPM</span>
-        </div>
-      </div>
-
-      {/* Context panel (shown when paused) */}
-      {!state.playing && countdown === null && (
-        <div className='mx-3 max-h-[25vh] overflow-y-auto rounded-lg border border-gray-500/20 bg-gray-500/10 p-3 md:mx-4 md:max-h-[30vh] md:rounded-xl md:p-4'>
-          <div className='mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide opacity-60 md:mb-3'>
+        {/* WPM selector */}
+        <div className='relative shrink-0'>
+          <button
+            className='flex items-center gap-1 rounded-full border border-gray-500/20 bg-gray-500/10 px-3 py-1.5 text-sm tabular-nums transition-colors hover:bg-gray-500/20'
+            onClick={() => setShowWpmDropdown(!showWpmDropdown)}
+            aria-label={_('Select reading speed')}
+            title={_('Select reading speed')}
+          >
+            <span className='font-semibold'>{state.wpm}</span>
+            <span className='ml-0.5 text-xs opacity-50'>WPM</span>
             <svg
-              width='14'
-              height='14'
               viewBox='0 0 24 24'
               fill='none'
               stroke='currentColor'
-              strokeWidth='2'
-              className='md:h-4 md:w-4'
+              strokeWidth='2.5'
+              className='ml-0.5 h-3 w-3 shrink-0 opacity-50'
             >
-              <path d='M4 6h16M4 12h16M4 18h10' />
+              <path d='M6 9l6 6 6-6' />
             </svg>
-            <span>{_('Context')}</span>
-          </div>
-          <div className='text-left text-base leading-relaxed md:text-lg'>
-            <span className='opacity-70'>{getContextBefore()} </span>
-            <span className='font-semibold' style={{ color: accentColor }}>
-              {currentWord?.text || ''}
-            </span>
-            <span className='opacity-70'> {getContextAfter()}</span>
-          </div>
+          </button>
+          {showWpmDropdown && (
+            <>
+              <Overlay onDismiss={() => setShowWpmDropdown(false)} />
+              <div
+                className='absolute right-0 top-full z-[100] mt-1.5 max-h-64 min-w-[7rem] overflow-y-auto rounded-2xl border border-gray-500/20 shadow-2xl'
+                style={{ backgroundColor: bgColor }}
+              >
+                {controller.getWpmOptions().map((wpm) => (
+                  <button
+                    key={wpm}
+                    className={clsx(
+                      'flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-md border-none bg-transparent px-4 py-1.5 text-sm tabular-nums transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-gray-500/15',
+                      state.wpm === wpm &&
+                        'bg-[color-mix(in_srgb,var(--rsvp-accent)_15%,transparent)] font-semibold',
+                    )}
+                    onClick={() => {
+                      controller.setWpm(wpm);
+                      setShowWpmDropdown(false);
+                    }}
+                  >
+                    <span>{wpm}</span>
+                    <span className='text-xs opacity-40'>WPM</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Context panel (always visible, collapsible) */}
+      <div className='mx-3 overflow-hidden rounded-lg border border-gray-500/20 bg-gray-500/10 md:mx-4 md:rounded-xl'>
+        <button
+          className='flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-60 transition-opacity hover:opacity-80 md:px-4 md:py-3'
+          onClick={toggleContext}
+          aria-expanded={!contextCollapsed}
+          aria-label={contextCollapsed ? _('Show context') : _('Hide context')}
+        >
+          <svg
+            width='14'
+            height='14'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            className='md:h-4 md:w-4'
+          >
+            <path d='M4 6h16M4 12h16M4 18h10' />
+          </svg>
+          <span className='flex-1 text-left'>{_('Context')}</span>
+          <IoChevronDown
+            className={clsx(
+              'h-3.5 w-3.5 transition-transform duration-200',
+              !contextCollapsed && 'rotate-180',
+            )}
+          />
+        </button>
+        {!contextCollapsed && (
+          <div
+            ref={contextPanelRef}
+            className='max-h-[20vh] overflow-y-auto px-3 pb-3 md:px-4 md:pb-4'
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <div className='text-left text-base leading-relaxed md:text-lg'>
+              {contextWords.map((w, i) => {
+                const wordIndex = contextWindow.start + i;
+                const isCurrent = wordIndex === state.currentIndex;
+                return (
+                  <span
+                    key={wordIndex}
+                    ref={isCurrent ? contextWordRef : undefined}
+                    role={isCurrent ? undefined : 'button'}
+                    tabIndex={isCurrent ? undefined : 0}
+                    className={
+                      isCurrent ? undefined : 'cursor-pointer opacity-70 hover:opacity-100'
+                    }
+                    style={isCurrent ? { color: effectiveOrpColor } : undefined}
+                    onClick={isCurrent ? undefined : () => handleWordClick(wordIndex)}
+                    onKeyDown={
+                      isCurrent
+                        ? undefined
+                        : (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') handleWordClick(wordIndex);
+                          }
+                    }
+                  >
+                    {w.text}{' '}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Main content area */}
-      <div className='flex flex-1 flex-col items-center justify-center p-4 md:p-8'>
+      <div className='flex flex-1 flex-col items-center justify-center p-4 md:p-6'>
         <div className='flex h-full w-full flex-col items-center justify-center'>
           <div className='flex h-full w-full flex-col items-center'>
             {/* Top guide line */}
@@ -422,16 +663,22 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
               )}
 
               {/* Word display */}
-              <div className='relative flex min-h-16 w-full items-center justify-center whitespace-nowrap px-2 py-4 font-mono text-2xl font-medium tracking-wide sm:min-h-20 sm:px-4 sm:py-6 sm:text-3xl md:text-4xl lg:text-5xl'>
+              <div
+                className='rsvp-word relative flex min-h-16 w-full items-center justify-center whitespace-nowrap px-2 py-2 font-mono font-medium leading-none tracking-wide sm:min-h-20 sm:px-4 sm:py-4'
+                style={{ fontSize: `${currentFontSize}rem` }}
+              >
                 {currentWord ? (
                   <>
-                    <span className='absolute right-[calc(50%+0.3em)] text-right opacity-60'>
+                    <span className='rsvp-word-before absolute right-[calc(50%+0.3em)] text-right opacity-60'>
                       {wordBefore}
                     </span>
-                    <span className='relative z-10 font-bold' style={{ color: accentColor }}>
+                    <span
+                      className='rsvp-word-orp relative z-10 font-bold'
+                      style={{ color: effectiveOrpColor }}
+                    >
                       {orpChar}
                     </span>
-                    <span className='absolute left-[calc(50%+0.3em)] text-left opacity-60'>
+                    <span className='rsvp-word-after absolute left-[calc(50%+0.3em)] text-left opacity-60'>
                       {wordAfter}
                     </span>
                   </>
@@ -474,116 +721,174 @@ const RSVPOverlay: React.FC<RSVPOverlayProps> = ({
             aria-valuemin={0}
             aria-valuemax={100}
             className='relative h-2 cursor-pointer overflow-visible rounded bg-gray-500/30'
-            onClick={handleProgressBarClick}
+            onPointerDown={handleProgressBarPointerDown}
+            onPointerMove={handleProgressBarPointerMove}
+            onPointerUp={handleProgressBarPointerUp}
+            onPointerCancel={handleProgressBarPointerUp}
             onKeyDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
               if (e.key === 'ArrowLeft') controller.skipBackward();
               else if (e.key === 'ArrowRight') controller.skipForward();
             }}
-            title={_('Click to seek')}
+            title={_('Drag to seek')}
           >
             <div
-              className='absolute left-0 top-0 h-full rounded transition-[width] duration-100'
+              className={`absolute left-0 top-0 h-full rounded ${isProgressBarDragging ? '' : 'transition-[width] duration-100'}`}
               style={{ width: `${state.progress}%`, backgroundColor: accentColor }}
             />
             <div
-              className='absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full shadow transition-[left] duration-100'
+              className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full shadow ${isProgressBarDragging ? '' : 'transition-[left] duration-100'}`}
               style={{ left: `${state.progress}%`, backgroundColor: accentColor }}
             />
           </div>
         </div>
 
-        {/* Controls */}
-        <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4'>
-          {/* Playback controls - centered on mobile, middle on desktop */}
-          <div className='flex items-center justify-center gap-2 md:order-2 md:gap-4'>
-            <button
-              aria-label={_('Skip back 15 words')}
-              className='flex cursor-pointer items-center gap-1 rounded-full border-none bg-transparent px-2 py-1.5 transition-colors hover:bg-gray-500/20 active:scale-95 md:px-3 md:py-2'
-              onClick={() => controller.skipBackward(15)}
-              title={_('Back 15 words (Shift+Left)')}
-            >
-              <span className='text-xs font-semibold opacity-80'>15</span>
-              <IoPlaySkipBack className='h-5 w-5 md:h-6 md:w-6' />
-            </button>
+        {/* Playback controls */}
+        <div className='relative flex items-center justify-center gap-1 md:gap-2'>
+          <button
+            aria-label={_('Skip back 15 words')}
+            className='flex cursor-pointer items-center gap-0.5 rounded-full border-none bg-transparent px-2 py-1.5 transition-colors hover:bg-gray-500/20 active:scale-95'
+            onClick={() => controller.skipBackward(15)}
+            title={_('Back 15 words (Shift+Left)')}
+          >
+            <span className='text-xs font-semibold opacity-80'>15</span>
+            <IoPlaySkipBack className='h-5 w-5 md:h-6 md:w-6' />
+          </button>
 
-            <button
-              aria-label={state.playing ? _('Pause') : _('Play')}
-              className={clsx(
-                'flex h-14 w-14 cursor-pointer items-center justify-center rounded-full border-none bg-gray-500/15 transition-colors hover:bg-gray-500/25 active:scale-95 md:h-16 md:w-16',
-                state.playing ? '' : 'ps-1',
-              )}
-              onClick={() => controller.togglePlayPause()}
-              title={state.playing ? _('Pause (Space)') : _('Play (Space)')}
-            >
-              {state.playing ? (
-                <IoPause className='h-7 w-7 md:h-8 md:w-8' />
-              ) : (
-                <IoPlay className='h-7 w-7 md:h-8 md:w-8' />
-              )}
-            </button>
+          <button
+            aria-label={_('Decrease speed')}
+            className='flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95'
+            onClick={() => controller.decreaseSpeed()}
+            title={_('Slower (Left/Down)')}
+          >
+            <IoRemove className='h-4 w-4 md:h-5 md:w-5' />
+          </button>
 
-            <button
-              aria-label={_('Skip forward 15 words')}
-              className='flex cursor-pointer items-center gap-1 rounded-full border-none bg-transparent px-2 py-1.5 transition-colors hover:bg-gray-500/20 active:scale-95 md:px-3 md:py-2'
-              onClick={() => controller.skipForward(15)}
-              title={_('Forward 15 words (Shift+Right)')}
-            >
-              <IoPlaySkipForward className='h-5 w-5 md:h-6 md:w-6' />
-              <span className='text-xs font-semibold opacity-80'>15</span>
-            </button>
-          </div>
+          <button
+            aria-label={state.playing ? _('Pause') : _('Play')}
+            className={clsx(
+              'flex h-14 w-14 cursor-pointer items-center justify-center rounded-full border-none bg-gray-500/15 transition-colors hover:bg-gray-500/25 active:scale-95 md:h-16 md:w-16',
+              state.playing ? '' : 'ps-1',
+            )}
+            onClick={() => controller.togglePlayPause()}
+            title={state.playing ? _('Pause (Space)') : _('Play (Space)')}
+          >
+            {state.playing ? (
+              <IoPause className='h-7 w-7 md:h-8 md:w-8' />
+            ) : (
+              <IoPlay className='h-7 w-7 md:h-8 md:w-8' />
+            )}
+          </button>
 
-          {/* Secondary controls row on mobile, split on desktop */}
-          <div className='flex items-center justify-between gap-4 md:contents'>
-            {/* Punctuation pause - left on desktop */}
-            <div className='flex items-center md:order-1 md:min-w-[140px] md:flex-1'>
-              <label className='flex cursor-pointer items-center gap-1.5 text-xs font-medium opacity-80 md:gap-2'>
-                <span className='hidden sm:inline'>{_('Pause:')}</span>
-                <span className='sm:hidden'>{_('Pause:')}</span>
-                <select
-                  className='cursor-pointer rounded border border-gray-500/30 bg-gray-500/20 px-1.5 py-1 text-xs font-medium transition-colors hover:border-gray-500/40 hover:bg-gray-500/30 md:px-2'
-                  style={{ color: 'inherit' }}
-                  value={state.punctuationPauseMs}
-                  onChange={(e) => controller.setPunctuationPause(parseInt(e.target.value, 10))}
-                >
-                  {controller.getPunctuationPauseOptions().map((option) => (
-                    <option key={option} value={option}>
-                      {option}ms
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+          <button
+            aria-label={_('Increase speed')}
+            className='flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95'
+            onClick={() => controller.increaseSpeed()}
+            title={_('Faster (Right/Up)')}
+          >
+            <IoAdd className='h-4 w-4 md:h-5 md:w-5' />
+          </button>
 
-            {/* Speed controls - right on desktop */}
-            <div className='flex items-center justify-end gap-1.5 md:order-3 md:min-w-[140px] md:flex-1 md:gap-2'>
+          <button
+            aria-label={_('Skip forward 15 words')}
+            className='flex cursor-pointer items-center gap-0.5 rounded-full border-none bg-transparent px-2 py-1.5 transition-colors hover:bg-gray-500/20 active:scale-95'
+            onClick={() => controller.skipForward(15)}
+            title={_('Forward 15 words (Shift+Right)')}
+          >
+            <IoPlaySkipForward className='h-5 w-5 md:h-6 md:w-6' />
+            <span className='text-xs font-semibold opacity-80'>15</span>
+          </button>
+
+          <button
+            aria-label={_('Settings')}
+            className={clsx(
+              'absolute right-0 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95',
+              showSettings && 'bg-gray-500/15',
+            )}
+            onClick={() => setShowSettings((prev) => !prev)}
+            title={_('Settings')}
+          >
+            <IoSettingsSharp className='h-4 w-4 md:h-5 md:w-5' />
+          </button>
+        </div>
+
+        {/* Settings row (collapsible) */}
+        {showSettings && (
+          <div className='mt-3 flex flex-wrap items-center justify-evenly gap-x-8 gap-y-4 text-xs md:justify-center'>
+            {/* Punctuation pause */}
+            <label className='flex cursor-pointer items-center gap-1.5 font-medium opacity-80'>
+              <span className='mr-0.5 font-medium opacity-50'>{_('Punctuation Delay')}</span>
+              <select
+                className='cursor-pointer rounded border border-gray-500/30 bg-gray-500/20 px-1.5 py-1 text-xs font-medium transition-colors hover:border-gray-500/40 hover:bg-gray-500/30'
+                style={{ color: 'inherit' }}
+                value={state.punctuationPauseMs}
+                onChange={(e) => controller.setPunctuationPause(parseInt(e.target.value, 10))}
+              >
+                {controller.getPunctuationPauseOptions().map((option) => (
+                  <option key={option} value={option}>
+                    {option}ms
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Font size */}
+            <div className='flex items-center gap-0.5'>
+              <span className='mr-0.5 font-medium opacity-50'>{_('Font')}</span>
               <button
-                aria-label={_('Decrease speed')}
-                className='flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95 md:h-10 md:w-10'
-                onClick={() => controller.decreaseSpeed()}
-                title={_('Slower (Left/Down)')}
+                aria-label={_('Decrease font size')}
+                className='flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95'
+                onClick={() => updateFontSize(fontSizeIndex - 1)}
+                disabled={fontSizeIndex <= 0}
               >
-                <IoRemove className='h-4 w-4 md:h-5 md:w-5' />
+                <IoRemove className='h-3 w-3' />
               </button>
-              <span
-                aria-label={_('Current speed')}
-                className='min-w-10 text-center text-sm font-medium md:min-w-12'
-              >
-                {state.wpm}
+              <span className='min-w-4 text-center font-medium tabular-nums'>
+                {fontSizeIndex + 1}
               </span>
               <button
-                aria-label={_('Increase speed')}
-                className='flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95 md:h-10 md:w-10'
-                onClick={() => controller.increaseSpeed()}
-                title={_('Faster (Right/Up)')}
+                aria-label={_('Increase font size')}
+                className='flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-gray-500/20 active:scale-95'
+                onClick={() => updateFontSize(fontSizeIndex + 1)}
+                disabled={fontSizeIndex >= FONT_SIZE_OPTIONS.length - 1}
               >
-                <IoAdd className='h-4 w-4 md:h-5 md:w-5' />
+                <IoAdd className='h-3 w-3' />
               </button>
             </div>
+
+            {/* Split hyphenated words */}
+            <div className='config-item gap-2'>
+              <span className='opacity-50'>{_('Split Hyphens')}</span>
+              <input
+                type='checkbox'
+                className='toggle'
+                checked={state.splitHyphens}
+                onChange={(e) => controller.setSplitHyphens(e.target.checked)}
+              />
+            </div>
+
+            {/* ORP color */}
+            <div className='flex items-center gap-1.5'>
+              <span className='mr-0.5 font-medium opacity-50'>{_('Focus')}</span>
+              {ORP_COLOR_OPTIONS.map((color, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => updateOrpColor(idx)}
+                  className={clsx(
+                    'h-6 min-h-6 w-6 min-w-6 rounded-full border-2 transition-transform',
+                    orpColorIndex === idx
+                      ? 'scale-110 border-current'
+                      : 'border-transparent hover:scale-105',
+                  )}
+                  style={{ backgroundColor: color || accentColor }}
+                  aria-label={idx === 0 ? _('Theme color') : `Color ${idx}`}
+                  title={idx === 0 ? _('Theme color') : undefined}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
