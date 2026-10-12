@@ -1,307 +1,116 @@
-<div align="center">
-  <a href="https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme" target="_blank">
-    <img src="https://github.com/readest/readest/blob/main/apps/readest-app/src-tauri/icons/icon.png?raw=true" alt="Readest Logo" width="20%" />
-  </a>
-  <h1>Readest</h1>
-  <br>
+# Legere 电子书阅读器
 
-[Readest][link-website] is an open-source ebook reader designed for immersive and deep reading experiences. Built as a modern rewrite of [Foliate](https://github.com/johnfactotum/foliate), it leverages [Next.js 16](https://github.com/vercel/next.js) and [Tauri v2](https://github.com/tauri-apps/tauri) to deliver a smooth, cross-platform experience across macOS, Windows, Linux, Android, iOS, and the Web.
+[简体中文](README.md) | [English](README_en.md)
 
-[![Website][badge-website]][link-website]
-[![Web App][badge-web-app]][link-web-readest]
-[![OS][badge-platforms]][link-website]
-<br>
-[![Discord][badge-discord]][link-discord]
-[![Reddit][badge-reddit]][link-reddit]
-[![AGPL Licence][badge-license]](LICENSE)
-[![Language Coverage][badge-language-coverage]][link-locales]
-[![Donate][badge-donate]][link-donate]
-[![Latest release][badge-release]][link-gh-releases]
-[![Last commit][badge-last-commit]][link-gh-commits]
-[![Commits][badge-commit-activity]][link-gh-pulse]
-[![][badge-hellogithub]][link-hellogithub]
-[![Ask DeepWiki][badge-deepwiki]][link-deepwiki]
-
-</div>
-
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#planned-features">Planned Features</a> •
-  <a href="#screenshots">Screenshots</a> •
-  <a href="#downloads">Downloads</a> •
-  <a href="#documentation">Documentation</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#troubleshooting">Troubleshooting</a> •
-  <a href="#support">Support</a> •
-  <a href="#license">License</a>
-</p>
-
-<div align="center">
-  <a href="https://readest.com" target="_blank">
-    <img src="./data/screenshots/landing_all_platforms.png" alt="Readest Banner" width="100%" />
-  </a>
-</div>
-
-## Features
-
-
-| **Feature**                                | **Description**                                                                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| **Multi-Format Support**                   | Support EPUB, PDF, MOBI, KF8 (AZW3), FB2, CBZ, TXT, HTML, MD (Markdown)                                                                      |
-| **Scroll/Page View Modes**                 | Switch between scrolling or paginated reading modes.                                                                   |
-| **Full-Text Search**                       | Search inside a book or across the current library shelf to find relevant sections.                                    |
-| **Annotations and Highlighting**           | Add highlights, bookmarks, and notes to enhance your reading experience and use instant mode for quicker interactions. |
-| **Dictionary/Wikipedia Lookup**            | Look up words with built-in sources or import local packs, including Yomitan ZIP/RDICT, from Settings → Custom Dictionaries. |
-| **[Parallel Read][link-parallel-read]**    | Read two books or documents simultaneously in a split-screen view.                                                     |
-| **Customize Font and Layout**              | Adjust font, layout, theme mode, and theme colors for a personalized experience.                                       |
-| **Code Syntax Highlighting**               | Read software manuals with rich coloring of code examples.                                                             |
-| **File Association and Open With**         | Quickly open files in Readest in your file browser with one-click.                                                     |
-| **Library Management**                     | Organize, sort, and manage your entire ebook library.                                                                  |
-| **OPDS/Calibre Integration**               | Integrate OPDS/Calibre to access online libraries and catalogs.                                                        |
-| **Web Page Clipping**                      | Open websites, sign in, and clip pages with **From Web Browser**. **From Web Novel** can reuse your browser session to import selected chapters and their images. |
-| **Translate with DeepL and Yandex**        | From a single sentence to the entire book—translate instantly.                                                         |
-| **Audiobook Support**                      | Extend functionality to play and manage audiobooks.                                                        |
-| **Text-to-Speech (TTS) Support**           | Enjoy smooth, multilingual narration—even within a single book.                                                        |
-| [**Read-Along Narration**][link-readalong] | Play embedded EPUB 3 Media Overlays with timed highlighting, or pair a reflowable EPUB locally with DRM-free MP3, M4A, or M4B narration. [Storyteller][link-storyteller] remains an option for generating phrase-aligned EPUBs. |
-| **Sync across Platforms**                  | Synchronize book files, reading progress, notes, and bookmarks across all supported platforms.                         |
-| [**Sync with Koreader**][link-kosync-wiki] | Synchronize reading progress, notes, and bookmarks with [Koreader][link-koreader] devices.                             |
-| **Accessibility**                          | Provides full keyboard navigation and support for screen readers such as VoiceOver, TalkBack, NVDA, and Orca.         |
-| **Visual & Focus Aids**                    | Reading ruler, paragraph-by-paragraph reading mode, and speed reading features.                                        |
-
-## Planned Features
-
-<div align="right">🛠 Building  |  🔄 Planned</div>
-
-| **Feature**                     | **Description**                                                            | |
-| ------------------------------- | -------------------------------------------------------------------------- | ------------ |
-| **AI-Powered Summarization**    | Generate summaries of books or chapters using AI for quick insights.       | 🛠           |
-| **Advanced Reading Stats**      | Track reading time, pages read, and more for detailed insights.            | 🛠           |
-| **Handwriting Annotations**     | Add support for handwriting annotations using a pen on compatible devices. | 🔄           |
-
-Stay tuned for continuous improvements and updates! Contributions and suggestions are always welcome—let's build the ultimate reading experience together. 😊
-
-## Screenshots
-
-![Annotations](./data/screenshots/annotations.png)
-
-![TTS](./data/screenshots/tts_speak_aloud.png)
-
-![DeepL](./data/screenshots/deepl.png)
-
-![Footnote](./data/screenshots/footnote_popover.png)
-
-![Wikipedia](./data/screenshots/wikipedia_vertical.png)
-
-![Theming Dark Mode](./data/screenshots/theming_dark_mode.png)
+Legere 是基于开源电子书阅读器 [Readest](https://github.com/readest/readest) 定制的轻量、无限制个人桌面端阅读器。
 
 ---
 
-## Downloads
+## 一、项目目的
 
-### Mobile Apps
+官方原版 Readest 是一款优秀的跨平台电子书阅读器，但在默认桌面端体验中存在部分功能门禁（如第三方网盘同步、自定义 AI 翻译需付费订阅解锁）以及窗口尺寸不记忆、macOS 顶栏拖拽困难等使用痛点。
 
-<div align="center">
-  <a href="https://apps.apple.com/app/id6738622779">
-    <img alt="Download on the App Store" src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" style="height: 50px;" /></a>&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=com.bilingify.readest">
-    <img alt="Get it on Google Play" src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" style="height: 50px;" /></a>
-</div>
-
-### Platform-Specific Downloads
-
-- macOS / iOS / iPadOS : Search and install **Readest** on the [App Store][link-appstore], _also_ available on TestFlight for beta test (send your Apple ID to <readestapp@gmail.com> to request access).
-- Windows / Linux / Android: Visit and download **Readest** at [https://readest.com][link-website] or the [Releases on GitHub][link-gh-releases].
-- Linux users can also install [Readest on Flathub][link-flathub].
-- Web: Visit and use **Readest for Web** at [https://web.readest.com][link-web-readest].
-
-#### Nix
-
-> [!NOTE]
-> The Nix package supports `x86_64-linux` only. nix-darwin is not supported.
-
-Try it without installing. `--accept-flake-config` opts in to the project's
-binary cache; without it Nix builds the whole Rust/Tauri stack from source.
-
-```sh
-nix run --accept-flake-config github:readest/readest
-```
-
-To install it, add the input to your `flake.nix`:
-
-```nix
-# Due to a limitation in how Nix fetches submodules, a regular GitHub input type will fail to evaluate.
-inputs.readest = {
-  url = "https://github.com/readest/readest.git";
-  type = "git";
-  submodules = true;
-};
-```
-
-then in `configuration.nix` add the package and the cache. The cache is needed
-here as well because a flake input's own `nixConfig` does not apply to your
-system build:
-
-```nix
-environment.systemPackages = [
-  inputs.readest.packages.${pkgs.stdenv.hostPlatform.system}.default
-];
-
-nix.settings = {
-  substituters = [ "https://readest.cachix.org" ];
-  trusted-public-keys = [
-    "readest.cachix.org-1:KvKAePcZZCZB8ytFIAOGdgN3VRdmFHGRMHqMVckbt5c="
-  ];
-};
-```
-
-## Documentation
-
-Guides, tutorials, and FAQs for installing and using Readest live in the official documentation:
-
-📖 **[https://readest.com/docs][link-docs]**
-
-Contributor references live in the repository: [architecture](./apps/readest-app/docs/architecture.md),
-[code layout](./apps/readest-app/docs/code-layout.md), and
-[testing](./apps/readest-app/docs/testing.md).
-
-## Building from Source
-
-To build Readest from the latest commit, see [Getting Started](./CONTRIBUTING.md#getting-started).
-
-## Troubleshooting
-
-### 1. Readest Won’t Launch on Windows (Missing Edge WebView2 Runtime)
-
-**Symptom**
-
-- When you double-click readest.exe, nothing happens. No window appears, and Task Manager does not show the process.
-- This can affect both the standard installer and the portable version.
-
-**Cause**
-
-- Microsoft Edge WebView2 Runtime is either missing, outdated, or improperly installed on your system. Readest depends on WebView2 to render the interface on Windows.
-
-**How to Fix**
-
-1. Check if WebView2 is installed
-   - Open “Add or Remove Programs” (a.k.a. Apps & features) on Windows. Look for “Microsoft Edge WebView2 Runtime.”
-2. Install or Update WebView2
-   - Download the WebView2 Runtime directly from Microsoft: [link](https://developer.microsoft.com/en-us/microsoft-edge/webview2?form=MA13LH).
-   - If you prefer an offline installer, download the offline package and run it as an Administrator.
-3. Re-run Readest
-   - After installing/updating WebView2, launch readest.exe again.
-   - If you still encounter problems, reboot your PC and try again.
-
-**Additional Tips**
-
-- If reinstalling once doesn’t work, uninstall Edge WebView2 completely, then reinstall it with Administrator privileges.
-- Verify your Windows installation has the latest updates from Microsoft.
-
-**Still Stuck?**
-
-- See Issue [readest/readest#358](https://github.com/readest/readest/issues/358) for further details, or head over to our [Discord][link-discord] server and open a support discussion with detailed logs of your environment and the steps you’ve taken.
-
-### Linux Fails to Launch on Wayland / Niri
-
-Current Linux builds, including Flatpak, use CEF with an X11 window backend.
-Wayland sessions therefore need XWayland. Without a `DISPLAY`, older builds exit
-with `Runtime(CreateWindow)` before opening a window.
-
-On Niri, install `xwayland-satellite` 0.7 or later using your distribution's package manager
-and restart your Niri session. Niri 25.08 and later can start it on demand and
-set `DISPLAY` for applications. See [Niri's XWayland setup instructions](https://niri-wm.github.io/niri/Xwayland.html).
-
-From a terminal in that session, check `printenv DISPLAY`, then launch Readest:
-
-```sh
-flatpak run com.bilingify.readest
-```
-
-The Flatpak already requests the X11 socket. If you have customized its sandbox
-permissions, allow that socket as well. Setting `DISPLAY` to an arbitrary value
-does not start XWayland; use the value provided by your session.
-`--ozone-platform=wayland` cannot enable native Wayland support in this runtime,
-and WebKitGTK environment variables do not affect CEF.
-
-## Contributors
-
-Readest is open-source, and contributions are welcome! Feel free to open issues, suggest features, or submit pull requests. Please **review our [contributing guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before you start**. We also welcome you to join our [Discord][link-discord] community for either support or contributing guidance.
-
-<a href="https://github.com/readest/readest/graphs/contributors">
-  <p align="left">
-    <img width="500" src="https://contrib.rocks/image?repo=readest/readest" alt="A table of avatars from the project's contributors" />
-  </p>
-</a>
-
-## Support
-
-If Readest has been useful to you, consider supporting its development at [donate.readest.com](https://donate.readest.com), where you'll find all available donation methods, including GitHub Sponsors, PayPal, card payments, and crypto. Your contribution helps us fix bugs faster, improve performance, and keep building great features.
-
-### Sponsors
-
-<p align="center">
-  <a title="Browser testing via TestMu AI" href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=readest" target="_blank">
-    <img src="https://raw.githubusercontent.com/readest/readest/refs/heads/main/data/sponsors/testmu-ai-logo.png" style="vertical-align: middle;" width="250" />
-  </a>
-</p>
-
-## License
-
-Readest is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License](https://www.gnu.org/licenses/agpl-3.0.html) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See the [LICENSE](LICENSE) file for details.
-
-The following libraries and frameworks are used in this software:
-
-- [foliate-js](https://github.com/johnfactotum/foliate-js), which is MIT licensed.
-- [zip.js](https://github.com/gildas-lormeau/zip.js), which is licensed under the BSD-3-Clause license.
-- [fflate](https://github.com/101arrowz/fflate), which is MIT licensed.
-- [PDF.js](https://github.com/mozilla/pdf.js), which is licensed under Apache License 2.0.
-- [daisyUI](https://github.com/saadeghi/daisyui), which is MIT licensed.
-- [marked](https://github.com/markedjs/marked), which is MIT licensed.
-- [next.js](https://github.com/vercel/next.js), which is MIT licensed.
-- [react-icons](https://github.com/react-icons/react-icons), which has various open-source licenses.
-- [react](https://github.com/facebook/react), which is MIT licensed.
-- [tauri](https://github.com/tauri-apps/tauri), which is MIT licensed.
-
-The following fonts are utilized in this software, either bundled within the application or provided through web fonts:
-
-[Bitter](https://fonts.google.com/specimen/Bitter), [Fira Code](https://fonts.google.com/specimen/Fira+Code), [Inter](https://fonts.google.com/specimen/Inter), [Literata](https://fonts.google.com/specimen/Literata), [Merriweather](https://fonts.google.com/specimen/Merriweather), [Noto Sans](https://fonts.google.com/specimen/Noto+Sans), [Roboto](https://fonts.google.com/specimen/Roboto), [LXGW WenKai](https://github.com/lxgw/LxgwWenKai), [MiSans](https://hyperos.mi.com/font/en/), [Source Han](https://github.com/adobe-fonts/source-han-sans/), [WenQuanYi Micro Hei](http://wenq.org/wqy2/)
-
-We would also like to thank the [Web Chinese Fonts Plan](https://chinese-font.netlify.app) for offering open-source tools that enable the use of Chinese fonts on the web.
+本项目旨在：
+1. **解除客户端所有功能限制**：无需注册登录官方账号，即可自由使用 WebDAV 同步、自定义大模型翻译、离线语音缓存等全部高级功能。
+2. **优化桌面端阅读与交互体验**：解决阅读窗口每次打开被重置为 800x600 的缺陷，并改善 macOS 无边框窗口难于拖动的交互手感。
+3. **保持轻量与上游同步能力**：所有改动严格遵循极简（KISS）原则，不侵入复杂底层架构，确保可以长期无缝跟进上游代码的最新迭代与 Bug 修复。
 
 ---
 
-<div align="center" style="color: gray;">Happy reading with Readest!</div>
+## 二、修改与定制功能清单
 
-[badge-website]: https://img.shields.io/badge/website-readest.com-orange
-[badge-web-app]: https://img.shields.io/badge/read%20online-web.readest.com-orange
-[badge-license]: https://img.shields.io/badge/license-AGPL--3.0-teal
-[badge-release]: https://img.shields.io/github/v/release/readest/readest?color=green
-[badge-platforms]: https://img.shields.io/badge/platforms-macOS%2C%20Windows%2C%20Linux%2C%20Android%2C%20iOS%2C%20Web%2C%20PWA-green
-[badge-last-commit]: https://img.shields.io/github/last-commit/readest/readest?color=blue
-[badge-commit-activity]: https://img.shields.io/github/commit-activity/m/readest/readest?color=blue
-[badge-discord]: https://img.shields.io/discord/1314226120886976544?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square
-[badge-hellogithub]: https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=8a5b6ade2aee461a8bd94e59200682a7&claim_uid=eRLUbPOy2qZtDgw&theme=small
-[badge-donate]: https://donate.readest.com/badge.svg
-[badge-deepwiki]: https://img.shields.io/badge/Ask-DeepWiki-blue
-[badge-reddit]: https://img.shields.io/reddit/subreddit-subscribers/readest?style=flat&logo=reddit&color=F37E41
-[badge-language-coverage]: https://img.shields.io/badge/coverage-53%25%20population%20🌍-green
-[link-donate]: https://donate.readest.com/?tickers=btc%2Ceth%2Csol%2Cusdc
-[link-appstore]: https://apps.apple.com/app/apple-store/id6738622779?pt=127463130&ct=github&mt=8
-[link-website]: https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme
-[link-flathub]: https://flathub.org/en/apps/com.bilingify.readest
-[link-web-readest]: https://web.readest.com
-[link-docs]: https://readest.com/docs
-[link-gh-releases]: https://github.com/readest/readest/releases
-[link-gh-commits]: https://github.com/readest/readest/commits/main
-[link-gh-pulse]: https://github.com/readest/readest/pulse
-[link-gh-wiki]: https://github.com/readest/readest/wiki
-[link-discord]: https://discord.gg/gntyVNk3BJ
-[link-parallel-read]: https://readest.com/#parallel-read
-[link-koreader]: https://github.com/koreader/koreader
-[link-hellogithub]: https://hellogithub.com/repository/8a5b6ade2aee461a8bd94e59200682a7
-[link-deepwiki]: https://deepwiki.com/readest/readest
-[link-locales]: https://github.com/readest/readest/tree/main/apps/readest-app/public/locales
-[link-kosync-wiki]: https://github.com/readest/readest/wiki/Sync-with-Koreader-devices
-[link-readalong]: https://github.com/readest/readest/blob/main/apps/readest-app/docs/read-along-narration.md
-[link-storyteller]: https://storyteller-platform.dev/
-[link-reddit]: https://reddit.com/r/readest/
+### 1. 应用品牌与外观定制
+- **应用名称**：修改为 **Legere**（包含应用窗口标题、Web 元数据、macOS 安装包名称）。
+- **应用标识符**：调整为独立 Bundle ID，避免与官方原版安装包冲突。
+- **应用图标**：替换为定制 Kindle 风格图标（`.icns`），并自动生成了各分辨率（16x16 至 512x512）的全套配套图标文件。
+
+### 2. 客户端全功能特权解锁（免登录）
+利用官方预留的自托管（Self-Hosted）机制，在客户端代码层开启全特权直通：
+- **第三方云存储同步自由**：解除原版对 Free 用户的暂停限制，完整支持 WebDAV（坚果云、群晖 NAS 等）、Google Drive、OneDrive、S3 等个人网盘双向同步，不再受官方云盘 500MB 的容量约束。
+- **自定义 AI 翻译与语境词典**：解除自定义翻译器的 Premium 置灰限制，支持自由接入个人私有的 OpenAI、DeepSeek、本地 Ollama 或自建大模型 API。
+- **离线 TTS 章节音频下载**：解锁按章节预先批量下载朗读音频的功能。
+- **Audiobookshelf 离线下载**：支持将 ABS 媒体库的有声书与电子书下载至本地离线收听和阅读。
+- **局域网 Nearby BookDrop 配对**：解锁信任设备配对，设备间通过局域网传输书籍无需每次手动确认。
+
+### 3. 阅读窗口尺寸与几何状态记忆
+- **问题根源**：原版在点击图书新开窗口时，硬编码写死了 `width: 800, height: 600, center: true`，且窗口关闭即销毁，每次打开都被重置。
+- **优化方案**：在阅读窗口组件中监听窗口尺寸变更并自动持久化；再次创建阅读窗口时优先读取上次调节的尺寸。
+- **使用体验**：自由拖动调节窗口大小后，再次打开任意图书均能精准恢复为上次设定的窗口尺寸。
+
+### 4. macOS 窗口拖拽体验优化
+- **问题根源**：macOS 采用 Overlay 隐藏原生系统标题栏设计，加上沉浸式阅读时控制条自动隐藏，导致整个窗口顶部没有任何拖拽手柄，用户只能小心翼翼寻找窗口最上边缘 1 像素的极窄缝隙。
+- **优化方案**：在顶部控制栏容器、中间图书标题区域以及顶部感应条上全面声明 Tauri 标准拖拽属性（`data-tauri-drag-region`）。
+- **使用体验**：鼠标移至顶部浮出控制栏后，抓取中间书名或任意空白区域即可随心拖拽移动窗口，操作自然流畅。
+
+---
+
+## 三、保持跟进上游更新的机制
+
+本项目采用独立分支（`custom-legere`）隔离维护，未对 `main` 主分支造成任何污染。后续上游官方有版本更新或修复时，通过 Git Rebase 即可快速同步：
+
+```bash
+# 步骤 1：同步上游主分支代码
+git checkout main
+git pull origin main
+
+# 步骤 2：将个人定制分支变基到最新上游
+git checkout custom-legere
+git rebase main
+```
+
+如需撤销或回退任何定制修改，可直接通过 Git 进行秒级安全回滚：
+```bash
+# 撤销最近一次定制提交
+git revert HEAD
+
+# 或者重置到指定提交
+git reset --hard <commit-hash>
+```
+
+---
+
+## 四、本地编译与打包发布指南（macOS）
+
+### 1. 环境准备
+确保本机已安装 Node.js (20+)、pnpm 以及 Rust stable 工具链：
+```bash
+node -v
+pnpm -v
+rustc -vV
+```
+
+### 2. 初始化子模块与依赖
+本项目使用了 Git Submodules 管理部分底层依赖（如 foliate-js、tauri 等），首次克隆需完整拉取：
+```bash
+# 拉取并初始化所有子模块
+git submodule update --init --recursive
+
+# 安装依赖
+pnpm install
+
+# 初始化内置阅读器引擎静态资源
+pnpm --filter @readest/readest-app setup-vendors
+```
+
+### 3. 编译 Release 安装包
+进入应用目录执行 Tauri 构建：
+```bash
+cd apps/readest-app
+
+# 编译生成 Legere.app（速度最快，适合本地直接使用）
+pnpm tauri build --bundles app
+
+# 或者编译生成 Legere.dmg 安装磁盘映像
+pnpm tauri build --bundles dmg
+```
+
+构建产物将保存在项目根目录的 `target/release/bundle/` 中：
+- `target/release/bundle/macos/Legere.app`
+- `target/release/bundle/dmg/Legere_*.dmg`
+
+### 4. 首次打开免签名提示处理
+由于本地自主编译缺少苹果商业开发者证书，首次打开若遇系统安全提示，可在终端运行去除隔离属性：
+```bash
+xattr -cr /Applications/Legere.app
+```
+或者前往 macOS **系统设置 -> 隐私与安全性**，点击页面底部的 **“仍要打开”**。
