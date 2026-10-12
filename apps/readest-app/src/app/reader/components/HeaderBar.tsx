@@ -197,6 +197,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       */}
       <div
         role='none'
+        data-tauri-drag-region
         tabIndex={-1}
         className={clsx(
           'absolute top-0 z-10 w-full',
@@ -220,6 +221,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       <div
         ref={headerRef}
         role='banner'
+        data-tauri-drag-region
         aria-label={_('Header Bar')}
         className={clsx(
           `header-bar bg-base-100 absolute top-0 z-10 flex h-11 w-full items-center pr-4`,
@@ -315,9 +317,10 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
         <div
           role='contentinfo'
+          data-tauri-drag-region
           aria-label={_('Title') + ' - ' + bookTitle}
           className={clsx(
-            'header-title z-15 bg-base-100 pointer-events-none hidden flex-1 items-center justify-center sm:flex',
+            'header-title z-15 bg-base-100 hidden flex-1 items-center justify-center sm:flex cursor-default select-none',
             !windowButtonVisible && 'absolute inset-0',
             isHeaderCompact && 'hidden!',
           )}
@@ -325,8 +328,9 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         >
           <div
             aria-hidden='true'
+            data-tauri-drag-region
             className={clsx(
-              'line-clamp-1 text-center text-xs font-semibold',
+              'line-clamp-1 text-center text-xs font-semibold cursor-default select-none',
               !windowButtonVisible && 'max-w-[50%]',
             )}
           >

@@ -23,18 +23,32 @@ const reserveWindowLabel = async (prefix: string) => {
   return label;
 };
 
+const getSavedReaderSize = () => {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('reader_window_size') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.width >= 400 && parsed.height >= 300) {
+        return { width: parsed.width, height: parsed.height };
+      }
+    }
+  } catch {}
+  return { width: 800, height: 600 };
+};
+
 const createReaderWindow = async (appService: AppService, url: string) => {
   const currentWindow = getCurrentWindow();
   const label = currentWindow.label;
   const newLabelPrefix = label === 'main' ? 'reader' : label;
   const newLabel = await reserveWindowLabel(newLabelPrefix);
+  const { width, height } = getSavedReaderSize();
   const win = new WebviewWindow(newLabel, {
     url,
-    width: 800,
-    height: 600,
+    width,
+    height,
     center: true,
     resizable: true,
-    title: 'Readest',
+    title: 'Legere',
     decorations: !!appService.isMacOSApp,
     // Linux stays opaque: a transparent WebKitGTK window turns invisible when
     // its web process is busy (#3682). macOS uses native decorations instead.

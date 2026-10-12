@@ -47,6 +47,40 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appService?.hasUpdater, settings.autoCheckUpdates]);
 
+  useEffect(() => {
+    if (!appService?.hasWindow) return;
+    let timer: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          const win = getCurrentWindow();
+          if (win.label.startsWith('reader')) {
+            const factor = await win.scaleFactor();
+            const size = await win.innerSize();
+            const logical = size.toLogical(factor);
+            if (logical.width >= 400 && logical.height >= 300) {
+              localStorage.setItem(
+                'reader_window_size',
+                JSON.stringify({
+                  width: Math.round(logical.width),
+                  height: Math.round(logical.height),
+                }),
+              );
+            }
+          }
+        } catch {}
+      }, 500);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timer);
+    };
+  }, [appService?.hasWindow]);
+
   return (
     <>
       <Reader />
