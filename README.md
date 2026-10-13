@@ -114,3 +114,46 @@ pnpm tauri build --bundles dmg
 xattr -cr /Applications/Legere.app
 ```
 或者前往 macOS **系统设置 -> 隐私与安全性**，点击页面底部的 **“仍要打开”**。
+
+---
+
+## 五、自定义 CSS 与界面微调技巧（免改代码）
+
+Legere 在架构上将样式体系严格隔离为两套独立的渲染层：
+1. **内容 CSS（Custom Content CSS）**：运行在电子书沙箱（iframe）内，作用于图书正文排版（字体、行距、缩进等）；
+2. **界面 CSS（Custom Reader UI CSS）**：动态注入到主界面宿主 DOM，作用于阅读器外层外壳（侧边栏、目录、顶栏、底栏、按钮等）。
+
+在阅读界面中点击 **设置（排版） -> 杂项/其他（Misc）** 面板，即可在对应输入框中填入自定义样式，点击 **应用（Apply）** 立即生效。
+
+### 1. 修改侧边栏（目录/笔记）的字体与大小
+侧边栏默认采用系统等比小字号，若觉得字体偏小或希望统一字体，可在 **自定义界面 CSS（Custom Reader UI CSS）** 中添加：
+```css
+/* 修改侧边栏整体字体族与基准字号 */
+.sidebar-content,
+.sidebar-header {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif !important;
+  font-size: 15px !important;
+}
+
+/* 目录标题列表与行高 */
+.sidebar-content .toc-list {
+  font-size: 15px !important;
+  line-height: 1.6;
+}
+
+/* 目录右侧页码微调 */
+.sidebar-content .toc-list [aria-hidden="true"] {
+  font-size: 12px !important;
+}
+```
+
+### 2. 隐藏目录树中的“当前位置”提示行
+侧边栏目录默认会动态合成并插入一行带有蓝色书本图标的“当前位置（Current position）”提示行（用于超长章节指示读到第几页）。如果追求目录极致清爽整洁，可在 **自定义界面 CSS（Custom Reader UI CSS）** 中加入以下规则一键隐藏：
+```css
+/* 隐藏目录中的“当前位置”行 */
+.toc-list [aria-label*="Current position"],
+.toc-list [aria-label*="当前位置"] {
+  display: none !important;
+}
+```
+
