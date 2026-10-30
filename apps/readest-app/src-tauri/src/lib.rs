@@ -404,21 +404,7 @@ fn compute_updater_disabled(
 
 #[cfg(desktop)]
 fn updater_disabled() -> bool {
-    let env_disable = std::env::var("READEST_DISABLE_UPDATER").is_ok();
-    #[cfg(target_os = "linux")]
-    {
-        let is_flatpak =
-            std::env::var("FLATPAK_ID").is_ok() || std::path::Path::new("/.flatpak-info").exists();
-        let is_appimage = std::env::var("APPIMAGE").is_ok()
-            || std::env::current_exe()
-                .map(|path| path.to_string_lossy().contains("/tmp/.mount_"))
-                .unwrap_or(false);
-        compute_updater_disabled(env_disable, true, is_flatpak, is_appimage)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        compute_updater_disabled(env_disable, false, false, false)
-    }
+    true
 }
 
 // Authoritative source of truth for the frontend `hasUpdater` capability.
